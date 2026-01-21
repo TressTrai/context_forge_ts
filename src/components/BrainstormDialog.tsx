@@ -19,6 +19,7 @@ interface BrainstormDialogProps {
     ollama: { ok: boolean } | null
     claude: { ok: boolean } | null
   }
+  systemPrompt?: string
 }
 
 // Simple markdown rendering for assistant messages
@@ -202,6 +203,7 @@ export function BrainstormDialog({
   onSaveMessage,
   error,
   providerHealth,
+  systemPrompt,
 }: BrainstormDialogProps) {
   const [inputValue, setInputValue] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -276,6 +278,15 @@ export function BrainstormDialog({
                 Ollama {providerHealth?.ollama?.ok ? "" : "(offline)"}
               </option>
             </select>
+            {/* System prompt indicator */}
+            {systemPrompt && (
+              <span
+                className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                title={systemPrompt}
+              >
+                System Prompt Active
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button

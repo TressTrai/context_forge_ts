@@ -10,6 +10,7 @@ import { api } from "../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { DndProvider } from "@/components/dnd"
 import { SessionProvider, useSession } from "@/contexts/SessionContext"
+import { SaveTemplateDialog, ApplyTemplateDialog } from "@/components/templates"
 
 // Simple theme toggle hook
 function useTheme() {
@@ -28,10 +29,12 @@ function useTheme() {
   return { isDark, toggle: () => setIsDark(!isDark) }
 }
 
-// Session selector component
+// Session selector component with template actions
 function SessionSelector() {
   const { sessionId, switchSession, createSession, isLoading } = useSession()
   const sessions = useQuery(api.sessions.list)
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const [showApplyTemplate, setShowApplyTemplate] = useState(false)
 
   const handleCreateSession = async () => {
     const name = `Session ${(sessions?.length ?? 0) + 1}`
@@ -65,6 +68,47 @@ function SessionSelector() {
       <Button variant="outline" size="sm" onClick={handleCreateSession}>
         + New
       </Button>
+
+      {/* Template actions - only show when session is selected */}
+      {sessionId && (
+        <>
+          <div className="w-px h-6 bg-border" /> {/* Divider */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSaveTemplate(true)}
+            title="Save current session as a reusable template"
+          >
+            Save Template
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowApplyTemplate(true)}
+            title="Apply a template to this session"
+          >
+            Apply Template
+          </Button>
+
+          <SaveTemplateDialog
+            isOpen={showSaveTemplate}
+            onClose={() => setShowSaveTemplate(false)}
+            sessionId={sessionId}
+            onSuccess={() => {
+              // Could show a toast notification here
+            }}
+          />
+
+          <ApplyTemplateDialog
+            isOpen={showApplyTemplate}
+            onClose={() => setShowApplyTemplate(false)}
+            sessionId={sessionId}
+            onSuccess={() => {
+              // Could show a toast notification here
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -77,9 +121,27 @@ function RootLayoutContent() {
       <div className="min-h-screen bg-background">
         <header className="border-b border-border">
           <div className="mx-auto max-w-6xl px-8 py-4 flex items-center justify-between">
-            <Link to="/" className="hover:opacity-80">
-              <h1 className="text-2xl font-bold text-foreground">ContextForge</h1>
-            </Link>
+            <div className="flex items-center gap-6">
+              <Link to="/" className="hover:opacity-80">
+                <h1 className="text-2xl font-bold text-foreground">ContextForge</h1>
+              </Link>
+              <nav className="flex items-center gap-4">
+                <Link
+                  to="/"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  activeProps={{ className: "text-foreground font-medium" }}
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/templates"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  activeProps={{ className: "text-foreground font-medium" }}
+                >
+                  Templates
+                </Link>
+              </nav>
+            </div>
             <div className="flex items-center gap-4">
               <SessionSelector />
               <Button variant="outline" size="sm" onClick={toggle}>

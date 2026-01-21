@@ -87,20 +87,22 @@ export const create = mutation({
   },
 })
 
-// Update a session (e.g., rename)
+// Update a session (e.g., rename, system prompt)
 export const update = mutation({
   args: {
     id: v.id("sessions"),
     name: v.optional(v.string()),
+    systemPrompt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id)
     if (!session) throw new Error("Session not found")
 
-    await ctx.db.patch(args.id, {
-      name: args.name,
-      updatedAt: Date.now(),
-    })
+    const updates: Record<string, unknown> = { updatedAt: Date.now() }
+    if (args.name !== undefined) updates.name = args.name
+    if (args.systemPrompt !== undefined) updates.systemPrompt = args.systemPrompt
+
+    await ctx.db.patch(args.id, updates)
     return args.id
   },
 })

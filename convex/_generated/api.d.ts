@@ -21,6 +21,7 @@ import type * as lib_validators from "../lib/validators.js";
 import type * as metrics from "../metrics.js";
 import type * as sessions from "../sessions.js";
 import type * as snapshots from "../snapshots.js";
+import type * as templates from "../templates.js";
 import type * as testing from "../testing.js";
 
 import type {
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   metrics: typeof metrics;
   sessions: typeof sessions;
   snapshots: typeof snapshots;
+  templates: typeof templates;
   testing: typeof testing;
 }>;
 

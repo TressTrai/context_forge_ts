@@ -24,6 +24,62 @@ export default defineSchema({
         total: v.number(), // Default: 500000
       })
     ),
+    // System prompt for LLM interactions
+    systemPrompt: v.optional(v.string()),
+    // Project/workflow linkage (Phase 2+)
+    projectId: v.optional(v.id("projects")),
+    templateId: v.optional(v.id("templates")),
+    stepNumber: v.optional(v.number()),
+  }).index("by_project", ["projectId"]),
+
+  // Templates - reusable session configurations
+  templates: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    systemPrompt: v.optional(v.string()),
+    // Snapshot of blocks to load when applying template
+    blocks: v.array(
+      v.object({
+        content: v.string(),
+        type: v.string(),
+        zone: zoneValidator,
+        position: v.number(),
+      })
+    ),
+    // Workflow linkage (Phase 3)
+    workflowId: v.optional(v.id("workflows")),
+    stepOrder: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_workflow", ["workflowId", "stepOrder"]),
+
+  // Projects - groups related sessions (Phase 2)
+  projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    workflowId: v.optional(v.id("workflows")),
+    currentStep: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
+  // Workflows - ordered sequence of templates (Phase 3)
+  workflows: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    steps: v.array(
+      v.object({
+        templateId: v.optional(v.id("templates")), // Optional - can be unlinked initially
+        name: v.string(),
+        description: v.optional(v.string()),
+        // Which zones to carry forward from previous step
+        carryForwardZones: v.optional(
+          v.array(v.union(v.literal("PERMANENT"), v.literal("STABLE"), v.literal("WORKING")))
+        ),
+      })
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
   }),
 
   // Core blocks table - content blocks within sessions
