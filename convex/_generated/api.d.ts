@@ -10,6 +10,7 @@
 
 import type * as blocks from "../blocks.js";
 import type * as claudeNode from "../claudeNode.js";
+import type * as context from "../context.js";
 import type * as counters from "../counters.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
@@ -31,6 +32,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   blocks: typeof blocks;
   claudeNode: typeof claudeNode;
+  context: typeof context;
   counters: typeof counters;
   generations: typeof generations;
   http: typeof http;

@@ -13,6 +13,7 @@ import { useFileDrop } from "@/hooks/useFileDrop"
 import { useSession } from "@/contexts/SessionContext"
 import { GeneratePanel } from "@/components/GeneratePanel"
 import { SessionMetrics, BlockTokenBadge, ZoneHeader } from "@/components/metrics"
+import { ContextExport } from "@/components/ContextExport"
 import { cn } from "@/lib/utils"
 
 // Zone display info
@@ -240,6 +241,7 @@ function BlockCard({
   createdAt: number
   tokens?: number
 }) {
+  const [copied, setCopied] = useState(false)
   const removeBlock = useMutation(api.blocks.remove)
   const moveBlock = useMutation(api.blocks.move)
 
@@ -253,6 +255,18 @@ function BlockCard({
     e.stopPropagation()
     e.preventDefault()
     await moveBlock({ id, zone: targetZone })
+  }
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      console.error("Failed to copy:", err)
+    }
   }
 
   const timeAgo = formatTimeAgo(createdAt)
@@ -269,6 +283,14 @@ function BlockCard({
           <BlockTokenBadge tokens={tokens} />
         </div>
         <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            className="h-6 px-2 text-xs"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </Button>
           <Link
             to="/blocks/$blockId"
             params={{ blockId: id }}
@@ -478,9 +500,10 @@ function HomePage() {
 
   return (
     <div className="space-y-6">
-      {/* Session metrics panel */}
-      <section>
+      {/* Session metrics and export */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SessionMetrics sessionId={sessionId} />
+        <ContextExport sessionId={sessionId} />
       </section>
 
       <section className="rounded-lg border border-border bg-card p-6">
