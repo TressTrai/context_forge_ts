@@ -166,6 +166,13 @@ function RootLayoutContent() {
                 >
                   Projects
                 </Link>
+                <Link
+                  to="/workflows"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  activeProps={{ className: "text-foreground font-medium" }}
+                >
+                  Workflows
+                </Link>
               </nav>
             </div>
             <div className="flex items-center gap-4">

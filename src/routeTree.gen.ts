@@ -9,12 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkflowsWorkflowIdRouteImport } from './routes/workflows.$workflowId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as BlocksBlockIdRouteImport } from './routes/blocks/$blockId'
 
+const WorkflowsRoute = WorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
@@ -29,6 +36,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const WorkflowsWorkflowIdRoute = WorkflowsWorkflowIdRouteImport.update({
+  id: '/$workflowId',
+  path: '/$workflowId',
+  getParentRoute: () => WorkflowsRoute,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/$projectId',
@@ -45,23 +57,29 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/templates': typeof TemplatesRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/blocks/$blockId': typeof BlocksBlockIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/workflows/$workflowId': typeof WorkflowsWorkflowIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/templates': typeof TemplatesRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/blocks/$blockId': typeof BlocksBlockIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/workflows/$workflowId': typeof WorkflowsWorkflowIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/templates': typeof TemplatesRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/blocks/$blockId': typeof BlocksBlockIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/workflows/$workflowId': typeof WorkflowsWorkflowIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -69,33 +87,47 @@ export interface FileRouteTypes {
     | '/'
     | '/projects'
     | '/templates'
+    | '/workflows'
     | '/blocks/$blockId'
     | '/projects/$projectId'
+    | '/workflows/$workflowId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/projects'
     | '/templates'
+    | '/workflows'
     | '/blocks/$blockId'
     | '/projects/$projectId'
+    | '/workflows/$workflowId'
   id:
     | '__root__'
     | '/'
     | '/projects'
     | '/templates'
+    | '/workflows'
     | '/blocks/$blockId'
     | '/projects/$projectId'
+    | '/workflows/$workflowId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   TemplatesRoute: typeof TemplatesRoute
+  WorkflowsRoute: typeof WorkflowsRouteWithChildren
   BlocksBlockIdRoute: typeof BlocksBlockIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workflows': {
+      id: '/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/templates': {
       id: '/templates'
       path: '/templates'
@@ -116,6 +148,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/workflows/$workflowId': {
+      id: '/workflows/$workflowId'
+      path: '/$workflowId'
+      fullPath: '/workflows/$workflowId'
+      preLoaderRoute: typeof WorkflowsWorkflowIdRouteImport
+      parentRoute: typeof WorkflowsRoute
     }
     '/projects/$projectId': {
       id: '/projects/$projectId'
@@ -146,10 +185,23 @@ const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
   ProjectsRouteChildren,
 )
 
+interface WorkflowsRouteChildren {
+  WorkflowsWorkflowIdRoute: typeof WorkflowsWorkflowIdRoute
+}
+
+const WorkflowsRouteChildren: WorkflowsRouteChildren = {
+  WorkflowsWorkflowIdRoute: WorkflowsWorkflowIdRoute,
+}
+
+const WorkflowsRouteWithChildren = WorkflowsRoute._addFileChildren(
+  WorkflowsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   TemplatesRoute: TemplatesRoute,
+  WorkflowsRoute: WorkflowsRouteWithChildren,
   BlocksBlockIdRoute: BlocksBlockIdRoute,
 }
 export const routeTree = rootRouteImport

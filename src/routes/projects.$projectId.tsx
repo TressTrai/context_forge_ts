@@ -268,9 +268,11 @@ function ProjectDashboard() {
 
   const project = useQuery(api.projects.get, { id: projectId as Id<"projects"> })
   const removeSession = useMutation(api.projects.removeSession)
+  const advanceStep = useMutation(api.workflows.advanceStep)
 
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showCreateSession, setShowCreateSession] = useState(false)
+  const [isAdvancing, setIsAdvancing] = useState(false)
 
   const handleOpenSession = (sessionId: Id<"sessions">) => {
     switchSession(sessionId)
@@ -279,6 +281,28 @@ function ProjectDashboard() {
 
   const handleRemoveSession = async (sessionId: Id<"sessions">) => {
     await removeSession({ sessionId })
+  }
+
+  const handleAdvanceStep = async () => {
+    if (!project || !project.workflow) return
+
+    // Find the current step's session
+    const currentStepSession = project.sessions.find(
+      (s) => s.stepNumber === project.currentStep
+    )
+    if (!currentStepSession) return
+
+    setIsAdvancing(true)
+    try {
+      const result = await advanceStep({
+        projectId: project._id,
+        previousSessionId: currentStepSession._id,
+      })
+      // Open the new session
+      handleOpenSession(result.sessionId)
+    } finally {
+      setIsAdvancing(false)
+    }
   }
 
   if (project === undefined) {
@@ -325,16 +349,67 @@ function ProjectDashboard() {
       {/* Workflow info (if linked) */}
       {project.workflow && (
         <div className="p-4 rounded-lg border border-border bg-muted/30">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-muted-foreground">WORKFLOW</span>
-            <span className="text-sm font-medium">{project.workflow.name}</span>
-          </div>
-          {project.currentStep !== undefined && (
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Current Step:</span>
-              <span className="text-sm">
-                {project.workflow.steps[project.currentStep]?.name ?? `Step ${project.currentStep}`}
-              </span>
+              <span className="text-xs font-medium text-muted-foreground">WORKFLOW</span>
+              <Link
+                to="/workflows/$workflowId"
+                params={{ workflowId: project.workflow._id }}
+                className="text-sm font-medium hover:underline"
+              >
+                {project.workflow.name}
+              </Link>
+            </div>
+            {project.currentStep !== undefined &&
+              project.currentStep < project.workflow.steps.length - 1 && (
+                <Button
+                  size="sm"
+                  onClick={handleAdvanceStep}
+                  disabled={isAdvancing}
+                >
+                  {isAdvancing ? "Advancing..." : "Next Step →"}
+                </Button>
+              )}
+          </div>
+
+          {/* Step progress indicator */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-2">
+            {project.workflow.steps.map((step, index) => {
+              const isCompleted = (project.currentStep ?? 0) > index
+              const isCurrent = project.currentStep === index
+              const isPending = (project.currentStep ?? 0) < index
+
+              return (
+                <div key={index} className="flex items-center">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap ${
+                      isCompleted
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                        : isCurrent
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center bg-white/20">
+                      {isCompleted ? "✓" : index + 1}
+                    </span>
+                    {step.name}
+                  </div>
+                  {index < project.workflow!.steps.length - 1 && (
+                    <div
+                      className={`w-4 h-0.5 mx-1 ${
+                        isCompleted ? "bg-green-500" : "bg-border"
+                      }`}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {project.currentStep === project.workflow.steps.length - 1 && (
+            <div className="mt-2 text-xs text-green-600 dark:text-green-400">
+              ✓ Workflow complete
             </div>
           )}
         </div>

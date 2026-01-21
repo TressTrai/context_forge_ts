@@ -24,6 +24,7 @@ import type * as sessions from "../sessions.js";
 import type * as snapshots from "../snapshots.js";
 import type * as templates from "../templates.js";
 import type * as testing from "../testing.js";
+import type * as workflows from "../workflows.js";
 
 import type {
   ApiFromModules,
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   snapshots: typeof snapshots;
   templates: typeof templates;
   testing: typeof testing;
+  workflows: typeof workflows;
 }>;
 
 /**

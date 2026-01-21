@@ -272,13 +272,13 @@ Phase 4.x  (Polish - can be done incrementally)
 - [x] 2.3 Project Dashboard
 - [x] 2.4 Session-Project Linking
 
-### Phase 3: Workflows
-- [ ] 3.1 Database Schema (added in Phase 1)
-- [ ] 3.2 Workflow Definition
-- [ ] 3.3 Workflow Library
-- [ ] 3.4 Start Workflow
-- [ ] 3.5 Workflow Progression
-- [ ] 3.6 Context Carry-Forward
+### Phase 3: Workflows ✅ COMPLETE
+- [x] 3.1 Database Schema (added in Phase 1)
+- [x] 3.2 Workflow Definition
+- [x] 3.3 Workflow Library
+- [x] 3.4 Start Workflow
+- [x] 3.5 Workflow Progression
+- [x] 3.6 Context Carry-Forward
 
 ### Phase 4: Polish
 - [ ] 4.1 Navigation & Layout
