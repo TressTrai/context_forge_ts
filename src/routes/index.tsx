@@ -1,5 +1,6 @@
 /**
  * Home page - Zone layout with blocks.
+ * Compact UI optimized for vertical space.
  */
 
 import { useState, useMemo } from "react"
@@ -13,11 +14,10 @@ import { useFileDrop } from "@/hooks/useFileDrop"
 import { useSession } from "@/contexts/SessionContext"
 import { GeneratePanel } from "@/components/GeneratePanel"
 import { BrainstormPanel } from "@/components/BrainstormPanel"
-import { SessionMetrics, BlockTokenBadge, ZoneHeader } from "@/components/metrics"
+import { SessionMetrics, ZoneHeader } from "@/components/metrics"
 import { ContextExport } from "@/components/ContextExport"
 import { cn } from "@/lib/utils"
 import {
-  BLOCK_TYPES,
   BLOCK_TYPE_METADATA,
   getBlockTypesByCategory,
   getBlockTypeMetadata,
@@ -27,18 +27,9 @@ import {
 
 // Zone display info
 const ZONE_INFO: Record<Zone, { label: string; description: string }> = {
-  PERMANENT: {
-    label: "Permanent",
-    description: "Always included in context",
-  },
-  STABLE: {
-    label: "Stable",
-    description: "Included when relevant",
-  },
-  WORKING: {
-    label: "Working",
-    description: "Temporary/draft content",
-  },
+  PERMANENT: { label: "Permanent", description: "Always included" },
+  STABLE: { label: "Stable", description: "Reference material" },
+  WORKING: { label: "Working", description: "Draft content" },
 }
 
 // Simple client-side token estimation (4 chars/token)
@@ -46,44 +37,28 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
-// Add block form with budget validation
-function AddBlockForm({
-  sessionId,
-  defaultZone = "WORKING",
-}: {
-  sessionId: Id<"sessions">
-  defaultZone?: Zone
-}) {
+// Compact add block form
+function AddBlockForm({ sessionId }: { sessionId: Id<"sessions"> }) {
   const [content, setContent] = useState("")
   const [type, setType] = useState<BlockType>("note")
-  const [zone, setZone] = useState<Zone>(defaultZone)
+  const [zone, setZone] = useState<Zone>("WORKING")
+  const [isExpanded, setIsExpanded] = useState(false)
   const blockTypesByCategory = useMemo(() => getBlockTypesByCategory(), [])
-  const [budgetWarning, setBudgetWarning] = useState<string | null>(null)
   const createBlock = useMutation(api.blocks.create)
-
-  // Get zone metrics for budget checking
   const metrics = useQuery(api.metrics.getZoneMetrics, { sessionId })
 
-  // Estimate tokens for current content
   const estimatedTokens = useMemo(() => {
     if (!content.trim()) return 0
     return estimateTokens(content.trim())
   }, [content])
 
-  // Check budget status for selected zone
   const budgetStatus = useMemo(() => {
     if (!metrics || !content.trim()) return null
-
     const zoneData = metrics.zones[zone]
     if (!zoneData) return null
-
     const newTotal = zoneData.tokens + estimatedTokens
     const percentUsed = Math.round((newTotal / zoneData.budget) * 100)
-
     return {
-      currentTokens: zoneData.tokens,
-      newTotal,
-      budget: zoneData.budget,
       percentUsed,
       wouldExceed: newTotal > zoneData.budget,
       isWarning: percentUsed > 80 && percentUsed <= 95,
@@ -93,158 +68,124 @@ function AddBlockForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!content.trim()) return
-
-    // Check if would exceed budget
-    if (budgetStatus?.wouldExceed) {
-      setBudgetWarning(
-        `This would exceed the ${ZONE_INFO[zone].label} zone budget (${budgetStatus.percentUsed}% of limit). Content not added.`
-      )
-      return
-    }
-
-    // Clear any existing warning
-    setBudgetWarning(null)
-
+    if (!content.trim() || budgetStatus?.wouldExceed) return
     await createBlock({ sessionId, content: content.trim(), type, zone })
     setContent("")
+    setIsExpanded(false)
+  }
+
+  if (!isExpanded) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsExpanded(true)}
+        className="h-7 text-xs"
+      >
+        + Add Block
+      </Button>
+    )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label
-            htmlFor="block-type"
-            className="block text-sm font-medium mb-1 text-foreground"
-          >
-            Type
-          </label>
-          <select
-            id="block-type"
-            value={type}
-            onChange={(e) => {
-              const newType = e.target.value as BlockType
-              setType(newType)
-              // Update zone to match type's default zone
-              const meta = BLOCK_TYPE_METADATA[newType]
-              if (meta) {
-                setZone(meta.defaultZone)
-              }
-            }}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            {Object.entries(blockTypesByCategory).map(([category, types]) => (
-              <optgroup key={category} label={CATEGORY_LABELS[category]}>
-                {types.map((t) => (
-                  <option key={t} value={t}>
-                    {BLOCK_TYPE_METADATA[t].displayName}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label
-            htmlFor="block-zone"
-            className="block text-sm font-medium mb-1 text-foreground"
-          >
-            Zone
-          </label>
-          <select
-            id="block-zone"
-            value={zone}
-            onChange={(e) => {
-              setZone(e.target.value as Zone)
-              setBudgetWarning(null) // Clear warning on zone change
-            }}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            {ZONES.map((z) => (
-              <option key={z} value={z}>
-                {ZONE_INFO[z].label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label
-            htmlFor="block-content"
-            className="block text-sm font-medium text-foreground"
-          >
-            Content
-          </label>
-          {estimatedTokens > 0 && (
-            <span
-              className={cn(
-                "text-xs font-mono",
-                budgetStatus?.isDanger && "text-destructive",
-                budgetStatus?.isWarning && "text-yellow-600 dark:text-yellow-500"
-              )}
-            >
-              ~{estimatedTokens.toLocaleString()} tokens
-              {budgetStatus && ` (${budgetStatus.percentUsed}% after add)`}
-            </span>
-          )}
-        </div>
-        <textarea
-          id="block-content"
-          value={content}
+    <form onSubmit={handleSubmit} className="rounded border border-border bg-card p-3 space-y-2">
+      <div className="flex gap-2">
+        <select
+          value={type}
           onChange={(e) => {
-            setContent(e.target.value)
-            setBudgetWarning(null) // Clear warning on content change
+            const newType = e.target.value as BlockType
+            setType(newType)
+            const meta = BLOCK_TYPE_METADATA[newType]
+            if (meta) setZone(meta.defaultZone)
           }}
-          placeholder="Enter block content..."
-          rows={3}
-          className={cn(
-            "w-full rounded-md border bg-background px-3 py-2 text-sm resize-none",
-            budgetStatus?.wouldExceed
-              ? "border-destructive"
-              : budgetStatus?.isWarning
-                ? "border-yellow-500"
-                : "border-input"
-          )}
-        />
+          className="rounded border border-input bg-background px-2 py-1 text-xs flex-1"
+        >
+          {Object.entries(blockTypesByCategory).map(([category, types]) => (
+            <optgroup key={category} label={CATEGORY_LABELS[category]}>
+              {types.map((t) => (
+                <option key={t} value={t}>{BLOCK_TYPE_METADATA[t].displayName}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <select
+          value={zone}
+          onChange={(e) => setZone(e.target.value as Zone)}
+          className="rounded border border-input bg-background px-2 py-1 text-xs"
+        >
+          {ZONES.map((z) => (
+            <option key={z} value={z}>{ZONE_INFO[z].label}</option>
+          ))}
+        </select>
       </div>
-
-      {/* Budget warning */}
-      {budgetStatus?.isWarning && !budgetStatus.wouldExceed && (
-        <div className="p-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400 text-xs">
-          Warning: {ZONE_INFO[zone].label} zone will be at {budgetStatus.percentUsed}% capacity after adding this block.
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="Block content..."
+        rows={2}
+        className={cn(
+          "w-full rounded border bg-background px-2 py-1.5 text-sm resize-none",
+          budgetStatus?.wouldExceed ? "border-destructive" : "border-input"
+        )}
+        autoFocus
+      />
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          {estimatedTokens > 0 && `~${estimatedTokens} tokens`}
+          {budgetStatus?.wouldExceed && (
+            <span className="text-destructive ml-2">Exceeds budget</span>
+          )}
+        </span>
+        <div className="flex gap-1">
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setIsExpanded(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" className="h-6 px-2 text-xs" disabled={!content.trim() || budgetStatus?.wouldExceed}>
+            Add
+          </Button>
         </div>
-      )}
-
-      {/* Error warning */}
-      {(budgetWarning || budgetStatus?.wouldExceed) && (
-        <div className="p-2 rounded-md bg-destructive/10 border border-destructive text-destructive text-xs">
-          {budgetWarning || `This would exceed the ${ZONE_INFO[zone].label} zone budget (${budgetStatus?.percentUsed}% of limit).`}
-        </div>
-      )}
-
-      <Button
-        type="submit"
-        disabled={!content.trim() || budgetStatus?.wouldExceed}
-      >
-        Add Block
-      </Button>
+      </div>
     </form>
+  )
+}
+
+// Collapsible tools section
+function ToolsSection({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-7 px-2 text-xs text-muted-foreground"
+      >
+        {isOpen ? "▼" : "▶"} Tools
+      </Button>
+      {isOpen && (
+        <div className="mt-2 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <SessionMetrics sessionId={sessionId} />
+            <ContextExport sessionId={sessionId} />
+          </div>
+          <GeneratePanel sessionId={sessionId} />
+        </div>
+      )}
+    </div>
   )
 }
 
 // Format relative time
 function formatTimeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000)
-
-  if (seconds < 60) return "just now"
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return `${Math.floor(seconds / 86400)}d ago`
+  if (seconds < 60) return "now"
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  return `${Math.floor(seconds / 86400)}d`
 }
 
-// Single block card (content only, wrapped by SortableBlock for DnD)
+// Compact block card
 function BlockCard({
   id,
   content,
@@ -260,99 +201,78 @@ function BlockCard({
   createdAt: number
   tokens?: number
 }) {
-  const [copied, setCopied] = useState(false)
+  const [showActions, setShowActions] = useState(false)
   const removeBlock = useMutation(api.blocks.remove)
   const moveBlock = useMutation(api.blocks.move)
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    e.preventDefault()
     await removeBlock({ id })
   }
 
   const handleMove = async (e: React.MouseEvent, targetZone: Zone) => {
     e.stopPropagation()
-    e.preventDefault()
     await moveBlock({ id, zone: targetZone })
   }
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    e.preventDefault()
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch (err) {
-      console.error("Failed to copy:", err)
-    }
+    await navigator.clipboard.writeText(content)
   }
 
-  const timeAgo = formatTimeAgo(createdAt)
-  const otherZones = ZONES.filter((z) => z !== zone)
   const typeMeta = getBlockTypeMetadata(type)
+  const otherZones = ZONES.filter((z) => z !== zone)
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 select-none">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <span className={cn(
-            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium",
-            typeMeta.color
-          )}>
+    <div
+      className="rounded border border-border bg-card p-2 select-none hover:border-border/80 transition-colors"
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
+    >
+      <div className="flex items-center justify-between gap-1 mb-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", typeMeta.color)}>
             {typeMeta.displayName}
           </span>
-          <span className="text-xs text-muted-foreground">{timeAgo}</span>
-          <BlockTokenBadge tokens={tokens} />
+          <span className="text-[10px] text-muted-foreground">{formatTimeAgo(createdAt)}</span>
+          {tokens && <span className="text-[10px] text-muted-foreground font-mono">{tokens}t</span>}
         </div>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopy}
-            className="h-6 px-2 text-xs"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </Button>
-          <Link
-            to="/blocks/$blockId"
-            params={{ blockId: id }}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center justify-center h-6 px-2 text-xs rounded-md border border-input bg-background hover:bg-accent"
-          >
-            Edit
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDelete}
-            className="h-6 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-          >
-            Delete
-          </Button>
-        </div>
+        {showActions && (
+          <div className="flex gap-0.5 shrink-0">
+            <button onClick={handleCopy} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted">Copy</button>
+            <Link
+              to="/blocks/$blockId"
+              params={{ blockId: id }}
+              onClick={(e) => e.stopPropagation()}
+              className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted"
+            >
+              Edit
+            </Link>
+            <button onClick={handleDelete} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-destructive/10 text-destructive">Del</button>
+          </div>
+        )}
       </div>
-      <p className="text-sm text-foreground whitespace-pre-wrap break-words mb-2 line-clamp-3">
+      <p className="text-xs text-foreground whitespace-pre-wrap break-words line-clamp-2 leading-tight">
         {content}
       </p>
-      <div className="flex gap-1">
-        {otherZones.map((z) => (
-          <Button
-            key={z}
-            variant="outline"
-            size="sm"
-            onClick={(e) => handleMove(e, z)}
-            className="h-6 px-2 text-xs"
-          >
-            → {ZONE_INFO[z].label}
-          </Button>
-        ))}
-      </div>
+      {showActions && (
+        <div className="flex gap-1 mt-1">
+          {otherZones.map((z) => (
+            <button
+              key={z}
+              onClick={(e) => handleMove(e, z)}
+              className="px-1.5 py-0.5 text-[10px] rounded border border-input hover:bg-muted"
+            >
+              → {ZONE_INFO[z].label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-// Zone column with droppable area and file drop support
+// Zone column
 function ZoneColumn({
   sessionId,
   zone,
@@ -364,75 +284,54 @@ function ZoneColumn({
 }) {
   const blocks = useQuery(api.blocks.listByZone, { sessionId, zone })
   const info = ZONE_INFO[zone]
-
-  // File drop handling
   const { isDragOver, dropProps } = useFileDrop({
     sessionId,
     zone,
-    onSuccess: (fileName) => console.log(`Added file "${fileName}" to ${zone}`),
-    onError: (error) => console.warn(error),
+    onSuccess: () => {},
+    onError: () => {},
   })
 
-  // Sort blocks by position for display
-  const sortedBlocks = blocks
-    ? [...blocks].sort((a, b) => a.position - b.position)
-    : []
-
+  const sortedBlocks = blocks ? [...blocks].sort((a, b) => a.position - b.position) : []
   const blockIds = sortedBlocks.map((b) => b._id)
-
-  // Budget status
-  const isWarning = zoneMetrics && zoneMetrics.percentUsed > 80 && zoneMetrics.percentUsed <= 95
   const isDanger = zoneMetrics && zoneMetrics.percentUsed > 95
+  const isWarning = zoneMetrics && zoneMetrics.percentUsed > 80 && zoneMetrics.percentUsed <= 95
 
   return (
     <div className="flex flex-col h-full relative" {...dropProps}>
-      <div className="mb-3">
+      <div className="mb-2">
         {zoneMetrics ? (
-          <>
-            <ZoneHeader
-              zone={info.label}
-              blockCount={zoneMetrics.blocks}
-              tokens={zoneMetrics.tokens}
-              budget={zoneMetrics.budget}
-            />
-            <p className="text-xs text-muted-foreground mt-1">{info.description}</p>
-          </>
+          <ZoneHeader
+            zone={info.label}
+            blockCount={zoneMetrics.blocks}
+            tokens={zoneMetrics.tokens}
+            budget={zoneMetrics.budget}
+          />
         ) : (
-          <>
-            <h3 className="text-lg font-semibold">{info.label}</h3>
-            <p className="text-xs text-muted-foreground">{info.description}</p>
-          </>
+          <h3 className="text-sm font-semibold">{info.label}</h3>
         )}
-
-        {/* Budget warning alerts */}
         {isDanger && (
-          <div className="mt-2 p-2 rounded-md bg-destructive/10 border border-destructive text-destructive text-xs">
-            Zone at {zoneMetrics?.percentUsed}% capacity - consider archiving content
+          <div className="mt-1 p-1 rounded bg-destructive/10 text-destructive text-[10px]">
+            {zoneMetrics?.percentUsed}% - consider archiving
           </div>
         )}
         {isWarning && (
-          <div className="mt-2 p-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400 text-xs">
-            Zone approaching limit ({zoneMetrics?.percentUsed}%)
+          <div className="mt-1 p-1 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-[10px]">
+            {zoneMetrics?.percentUsed}% used
           </div>
         )}
       </div>
 
       <DroppableZone zone={zone} itemIds={blockIds}>
-        <div className="flex-1 space-y-2 min-h-[100px]">
+        <div className="flex-1 space-y-1.5 min-h-[60px] overflow-y-auto">
           {blocks === undefined ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <div className="text-xs text-muted-foreground">Loading...</div>
           ) : sortedBlocks.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-8 border border-dashed border-border rounded-lg">
-              Drop blocks or files here
+            <div className="text-xs text-muted-foreground text-center py-4 border border-dashed border-border rounded">
+              Drop here
             </div>
           ) : (
             sortedBlocks.map((block) => (
-              <SortableBlock
-                key={block._id}
-                id={block._id}
-                zone={block.zone}
-                position={block.position}
-              >
+              <SortableBlock key={block._id} id={block._id} zone={block.zone} position={block.position}>
                 <BlockCard
                   id={block._id}
                   content={block.content}
@@ -447,74 +346,48 @@ function ZoneColumn({
         </div>
       </DroppableZone>
 
-      <div className="mt-3 text-xs text-muted-foreground text-center">
-        {blocks?.length ?? 0} blocks
-      </div>
-
-      {/* File drop overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg z-10">
-          <div className="text-center">
-            <div className="text-3xl mb-2">📄</div>
-            <div className="text-sm font-medium text-primary">
-              Drop .txt or .md file
-            </div>
-          </div>
+        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded z-10">
+          <div className="text-xs font-medium text-primary">Drop file</div>
         </div>
       )}
     </div>
   )
 }
 
-// Three-zone layout
+// Zone layout
 function ZoneLayout({ sessionId }: { sessionId: Id<"sessions"> }) {
   const metrics = useQuery(api.metrics.getZoneMetrics, { sessionId })
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-[600px]">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 min-h-0">
       {ZONES.map((zone) => (
-        <div
-          key={zone}
-          className="rounded-lg border border-border bg-card p-4 flex flex-col"
-        >
-          <ZoneColumn
-            sessionId={sessionId}
-            zone={zone}
-            zoneMetrics={metrics?.zones[zone]}
-          />
+        <div key={zone} className="rounded border border-border bg-card p-2 flex flex-col min-h-0 overflow-hidden">
+          <ZoneColumn sessionId={sessionId} zone={zone} zoneMetrics={metrics?.zones[zone]} />
         </div>
       ))}
     </div>
   )
 }
 
-// No session selected message
+// No session message
 function NoSessionSelected() {
   const { createSession } = useSession()
-
-  const handleCreate = async () => {
-    await createSession("My First Session")
-  }
-
   return (
     <div className="text-center py-12">
-      <h2 className="text-xl font-semibold mb-2">No Session Selected</h2>
-      <p className="text-muted-foreground mb-4">
-        Create a session to start managing your context blocks.
-      </p>
-      <Button onClick={handleCreate}>Create Session</Button>
+      <h2 className="text-lg font-semibold mb-2">No Session Selected</h2>
+      <p className="text-sm text-muted-foreground mb-4">Create a session to start.</p>
+      <Button onClick={() => createSession("My First Session")}>Create Session</Button>
     </div>
   )
 }
 
-// Home page component
+// Home page
 function HomePage() {
   const { sessionId, isLoading } = useSession()
 
   if (isLoading) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">Loading...</div>
-    )
+    return <div className="text-center py-12 text-muted-foreground">Loading...</div>
   }
 
   if (!sessionId) {
@@ -522,35 +395,21 @@ function HomePage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Session metrics and export */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SessionMetrics sessionId={sessionId} />
-        <ContextExport sessionId={sessionId} />
-      </section>
+    <div className="flex flex-col gap-3 h-[calc(100vh-120px)]">
+      {/* Compact toolbar row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <SessionMetrics sessionId={sessionId} collapsed />
+          <AddBlockForm sessionId={sessionId} />
+        </div>
+        <div className="flex items-center gap-2">
+          <BrainstormPanel sessionId={sessionId} compact />
+          <ToolsSection sessionId={sessionId} />
+        </div>
+      </div>
 
-      <section className="rounded-lg border border-border bg-card p-6">
-        <h2 className="text-xl font-semibold mb-4">Add New Block</h2>
-        <AddBlockForm sessionId={sessionId} />
-      </section>
-
-      {/* LLM Generation Panel */}
-      <section>
-        <GeneratePanel sessionId={sessionId} />
-      </section>
-
-      {/* Brainstorm Panel */}
-      <section>
-        <BrainstormPanel sessionId={sessionId} />
-      </section>
-
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Context Zones</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Drag blocks to reorder or move between zones
-        </p>
-        <ZoneLayout sessionId={sessionId} />
-      </section>
+      {/* Zones take remaining space */}
+      <ZoneLayout sessionId={sessionId} />
     </div>
   )
 }

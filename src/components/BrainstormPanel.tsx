@@ -52,9 +52,10 @@ function useProviderHealth() {
 
 interface BrainstormPanelProps {
   sessionId: Id<"sessions">
+  compact?: boolean
 }
 
-export function BrainstormPanel({ sessionId }: BrainstormPanelProps) {
+export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelProps) {
   const health = useProviderHealth()
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
   const [newSystemPrompt, setNewSystemPrompt] = useState("")
@@ -136,6 +137,41 @@ export function BrainstormPanel({ sessionId }: BrainstormPanelProps) {
         <span className="w-2 h-2 rounded-full bg-destructive" />
         {name}
       </span>
+    )
+  }
+
+  // Compact mode - just a button
+  if (compact) {
+    const anyProviderAvailable = health.claude?.ok || health.ollama?.ok || health.openrouter?.ok
+    return (
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => brainstorm.open()}
+          disabled={!anyProviderAvailable}
+        >
+          {brainstorm.messages.length > 0
+            ? `Brainstorm (${brainstorm.messages.length})`
+            : "Brainstorm"}
+        </Button>
+        <BrainstormDialog
+          isOpen={brainstorm.isOpen}
+          onClose={brainstorm.close}
+          messages={brainstorm.messages}
+          isStreaming={brainstorm.isStreaming}
+          streamingText={brainstorm.streamingText}
+          provider={brainstorm.provider}
+          onProviderChange={brainstorm.setProvider}
+          onSendMessage={(content) => brainstorm.sendMessage(content)}
+          onClearConversation={brainstorm.clearConversation}
+          onSaveMessage={handleSaveMessage}
+          error={brainstorm.error}
+          providerHealth={health}
+          systemPrompt={activeSystemPrompt}
+        />
+      </>
     )
   }
 
