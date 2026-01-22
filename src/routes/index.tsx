@@ -24,6 +24,7 @@ import {
   CATEGORY_LABELS,
   type BlockType,
 } from "@/lib/blockTypes"
+import { useNavigate } from "@tanstack/react-router"
 
 // Zone display info
 const ZONE_INFO: Record<Zone, { label: string; description: string }> = {
@@ -382,6 +383,75 @@ function NoSessionSelected() {
   )
 }
 
+// Workflow step indicator with next step button
+function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const navigate = useNavigate()
+  const { switchSession } = useSession()
+  const workflowContext = useQuery(api.sessions.getWorkflowContext, { sessionId })
+  const goToNextStep = useMutation(api.sessions.goToNextStep)
+  const [isAdvancing, setIsAdvancing] = useState(false)
+
+  // Don't render if not part of a workflow
+  if (!workflowContext) return null
+
+  const handleNextStep = async () => {
+    setIsAdvancing(true)
+    try {
+      const result = await goToNextStep({ sessionId })
+      // Update localStorage synchronously (same fix as in SessionContext)
+      localStorage.setItem("contextforge-session-id", result.sessionId)
+      switchSession(result.sessionId)
+      // Force a re-render by navigating to the same page
+      navigate({ to: "/" })
+    } finally {
+      setIsAdvancing(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50 border border-border text-xs">
+      {/* Workflow name and step progress */}
+      <Link
+        to="/projects/$projectId"
+        params={{ projectId: workflowContext.projectId }}
+        className="text-muted-foreground hover:text-foreground"
+      >
+        {workflowContext.workflowName}
+      </Link>
+      <span className="text-muted-foreground">·</span>
+      <span className="font-medium">
+        Step {workflowContext.currentStepIndex + 1}/{workflowContext.totalSteps}
+      </span>
+      <span className="text-muted-foreground">·</span>
+      <span>{workflowContext.currentStepName}</span>
+
+      {/* Next step button */}
+      {workflowContext.hasNextStep && (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNextStep}
+            disabled={isAdvancing}
+            className="h-5 px-2 text-xs"
+          >
+            {isAdvancing ? "..." : `Next: ${workflowContext.nextStepName} →`}
+          </Button>
+        </>
+      )}
+
+      {/* Completed indicator */}
+      {!workflowContext.hasNextStep && (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-green-600 dark:text-green-400">✓ Final step</span>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Home page
 function HomePage() {
   const { sessionId, isLoading } = useSession()
@@ -396,6 +466,9 @@ function HomePage() {
 
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-120px)]">
+      {/* Workflow step indicator (if session is part of workflow) */}
+      <WorkflowStepIndicator sessionId={sessionId} />
+
       {/* Compact toolbar row */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">

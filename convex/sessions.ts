@@ -222,3 +222,187 @@ export const clear = mutation({
     return { deletedBlocks: blocks.length }
   },
 })
+
+// ============ Workflow Context ============
+
+/**
+ * Get workflow context for a session.
+ * Returns null if the session is not part of a workflow.
+ */
+export const getWorkflowContext = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId)
+    if (!session || !session.projectId || session.stepNumber === undefined) {
+      return null
+    }
+
+    const project = await ctx.db.get(session.projectId)
+    if (!project || !project.workflowId) {
+      return null
+    }
+
+    const workflow = await ctx.db.get(project.workflowId)
+    if (!workflow) {
+      return null
+    }
+
+    const currentStepIndex = session.stepNumber
+    const totalSteps = workflow.steps.length
+    const hasNextStep = currentStepIndex < totalSteps - 1
+    const currentStep = workflow.steps[currentStepIndex]
+    const nextStep = hasNextStep ? workflow.steps[currentStepIndex + 1] : null
+
+    // Check if next step session already exists
+    let nextStepSessionId: Id<"sessions"> | null = null
+    if (hasNextStep) {
+      const projectSessions = await ctx.db
+        .query("sessions")
+        .withIndex("by_project", (q) => q.eq("projectId", session.projectId!))
+        .collect()
+      const nextStepSession = projectSessions.find(
+        (s) => s.stepNumber === currentStepIndex + 1
+      )
+      nextStepSessionId = nextStepSession?._id ?? null
+    }
+
+    return {
+      projectId: session.projectId,
+      projectName: project.name,
+      workflowId: project.workflowId,
+      workflowName: workflow.name,
+      currentStepIndex,
+      currentStepName: currentStep?.name ?? `Step ${currentStepIndex + 1}`,
+      totalSteps,
+      hasNextStep,
+      nextStepName: nextStep?.name ?? null,
+      nextStepSessionId,
+    }
+  },
+})
+
+/**
+ * Go to the next workflow step.
+ * Creates the next step session if it doesn't exist, or returns the existing one.
+ */
+export const goToNextStep = mutation({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId)
+    if (!session || !session.projectId || session.stepNumber === undefined) {
+      throw new Error("Session is not part of a workflow")
+    }
+
+    const project = await ctx.db.get(session.projectId)
+    if (!project || !project.workflowId) {
+      throw new Error("Project not found or not linked to a workflow")
+    }
+
+    const workflow = await ctx.db.get(project.workflowId)
+    if (!workflow) {
+      throw new Error("Workflow not found")
+    }
+
+    const currentStepIndex = session.stepNumber
+    const nextStepIndex = currentStepIndex + 1
+
+    if (nextStepIndex >= workflow.steps.length) {
+      throw new Error("Already at the last step")
+    }
+
+    // Check if next step session already exists
+    const projectSessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_project", (q) => q.eq("projectId", session.projectId!))
+      .collect()
+    const existingNextSession = projectSessions.find(
+      (s) => s.stepNumber === nextStepIndex
+    )
+
+    if (existingNextSession) {
+      // Return existing session
+      return { sessionId: existingNextSession._id, created: false }
+    }
+
+    // Create new session for the next step
+    const nextStep = workflow.steps[nextStepIndex]
+    const now = Date.now()
+
+    const newSessionId = await ctx.db.insert("sessions", {
+      name: `${project.name} - ${nextStep.name}`,
+      projectId: session.projectId,
+      stepNumber: nextStepIndex,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    // Carry forward blocks from current session if configured
+    if (nextStep.carryForwardZones && nextStep.carryForwardZones.length > 0) {
+      const currentBlocks = await ctx.db
+        .query("blocks")
+        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+        .collect()
+
+      const blocksToCarry = currentBlocks.filter((block) =>
+        nextStep.carryForwardZones!.includes(block.zone as "PERMANENT" | "STABLE" | "WORKING")
+      )
+
+      for (const block of blocksToCarry) {
+        await ctx.db.insert("blocks", {
+          sessionId: newSessionId,
+          content: block.content,
+          type: block.type,
+          zone: block.zone,
+          position: block.position,
+          createdAt: now,
+          updatedAt: now,
+          tokens: block.tokens,
+          originalTokens: block.originalTokens,
+          tokenModel: block.tokenModel,
+        })
+      }
+    }
+
+    // Apply template if configured
+    if (nextStep.templateId) {
+      const template = await ctx.db.get(nextStep.templateId)
+      if (template) {
+        // Get current max positions per zone (from carried blocks)
+        const existingBlocks = await ctx.db
+          .query("blocks")
+          .withIndex("by_session", (q) => q.eq("sessionId", newSessionId))
+          .collect()
+
+        const maxPositions: Record<string, number> = { PERMANENT: -1, STABLE: -1, WORKING: -1 }
+        for (const block of existingBlocks) {
+          if (block.position > maxPositions[block.zone]) {
+            maxPositions[block.zone] = block.position
+          }
+        }
+
+        // Create blocks from template (after carried blocks)
+        for (const templateBlock of template.blocks) {
+          const zone = templateBlock.zone
+          maxPositions[zone]++
+          await ctx.db.insert("blocks", {
+            sessionId: newSessionId,
+            content: templateBlock.content,
+            type: templateBlock.type,
+            zone: templateBlock.zone,
+            position: maxPositions[zone],
+            createdAt: now,
+            updatedAt: now,
+          })
+        }
+      }
+    }
+
+    // Update project's current step
+    await ctx.db.patch(session.projectId, {
+      currentStep: nextStepIndex,
+      updatedAt: now,
+    })
+
+    return { sessionId: newSessionId, created: true }
+  },
+})
