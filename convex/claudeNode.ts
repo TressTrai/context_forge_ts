@@ -22,6 +22,7 @@ import {
   assembleContextWithConversation,
   extractSystemPromptFromBlocks,
 } from "./lib/context"
+import { createGeneration, flushLangfuse } from "./lib/langfuse"
 
 // Get Claude Code executable path by trying to locate it
 const getClaudeCodePath = (): string | undefined => {
@@ -328,7 +329,23 @@ export const streamGenerateWithContext = action({
     const messages = assembleContext(blocks, args.prompt)
     const prompt = formatMessagesAsPrompt(messages)
 
+    // Create LangFuse trace for observability
+    const trace = createGeneration(
+      "claude-generate",
+      {
+        sessionId: args.sessionId,
+        provider: "claude",
+        model: "claude-code",
+      },
+      {
+        systemPrompt,
+        messages,
+        prompt,
+      }
+    )
+
     let buffer = ""
+    let fullText = ""
     let lastFlush = Date.now()
 
     // Usage tracking
@@ -372,6 +389,7 @@ export const streamGenerateWithContext = action({
             if (delta && delta.type === "text_delta" && typeof delta.text === "string") {
               hasReceivedStreamEvents = true
               buffer += delta.text
+              fullText += delta.text
 
               // Throttle writes
               const now = Date.now()
@@ -391,6 +409,7 @@ export const streamGenerateWithContext = action({
             for (const block of content) {
               if (block.type === "text" && typeof block.text === "string") {
                 buffer += block.text
+                fullText += block.text
                 await flushBuffer()
               }
             }
@@ -421,6 +440,16 @@ export const streamGenerateWithContext = action({
         costUsd,
         durationMs,
       })
+
+      // Complete LangFuse trace
+      trace.complete({
+        text: fullText,
+        inputTokens,
+        outputTokens,
+        costUsd,
+        durationMs,
+      })
+      await flushLangfuse()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[Claude Stream] Error: ${errorMessage}`)
@@ -433,6 +462,10 @@ export const streamGenerateWithContext = action({
         generationId: args.generationId,
         error: `Claude Code error: ${errorMessage}`,
       })
+
+      // Record error in LangFuse
+      trace.error(errorMessage)
+      await flushLangfuse()
     }
   },
 })

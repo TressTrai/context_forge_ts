@@ -20,6 +20,7 @@ import {
   assembleContextWithConversation,
   extractSystemPromptFromBlocks,
 } from "./lib/context"
+import { createGeneration, flushLangfuse } from "./lib/langfuse"
 import {
   streamChat as streamOllama,
   checkHealth as checkOllamaHealth,
@@ -198,6 +199,21 @@ http.route({
       ? [{ role: "system" as const, content: systemPrompt }, ...contextMessages]
       : contextMessages
 
+    // Create LangFuse trace for observability
+    const startTime = Date.now()
+    const trace = createGeneration(
+      "ollama-chat",
+      {
+        sessionId,
+        provider: "ollama",
+        model: process.env.OLLAMA_MODEL || "gpt-oss:latest",
+      },
+      {
+        systemPrompt,
+        messages,
+      }
+    )
+
     // Create streaming response using TransformStream
     const { readable, writable } = new TransformStream()
     const writer = writable.getWriter()
@@ -236,10 +252,23 @@ http.route({
           })
         }
 
+        // Complete LangFuse trace
+        const durationMs = Date.now() - startTime
+        trace.complete({
+          text: fullResponse,
+          durationMs,
+        })
+        await flushLangfuse()
+
         await writer.close()
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error"
+
+        // Record error in LangFuse
+        trace.error(errorMessage)
+        await flushLangfuse()
+
         try {
           await writer.write(
             encoder.encode(
@@ -337,6 +366,21 @@ http.route({
       ? [{ role: "system" as const, content: systemPrompt }, ...contextMessages]
       : contextMessages
 
+    // Create LangFuse trace for observability
+    const startTime = Date.now()
+    const trace = createGeneration(
+      "ollama-brainstorm",
+      {
+        sessionId,
+        provider: "ollama",
+        model: process.env.OLLAMA_MODEL || "gpt-oss:latest",
+      },
+      {
+        systemPrompt,
+        messages,
+      }
+    )
+
     // Create streaming response using TransformStream
     const { readable, writable } = new TransformStream()
     const writer = writable.getWriter()
@@ -367,10 +411,23 @@ http.route({
 
         // NOTE: No auto-save for brainstorm - user manually saves messages
 
+        // Complete LangFuse trace
+        const durationMs = Date.now() - startTime
+        trace.complete({
+          text: fullResponse,
+          durationMs,
+        })
+        await flushLangfuse()
+
         await writer.close()
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error"
+
+        // Record error in LangFuse
+        trace.error(errorMessage)
+        await flushLangfuse()
+
         try {
           await writer.write(
             encoder.encode(
