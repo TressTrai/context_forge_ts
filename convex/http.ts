@@ -25,6 +25,10 @@ import {
   streamChat as streamOllama,
   checkHealth as checkOllamaHealth,
 } from "./lib/ollama"
+import {
+  streamChat as streamOpenRouter,
+  checkHealth as checkOpenRouterHealth,
+} from "./lib/openrouter"
 
 // Claude health status type (for health check endpoints)
 interface ClaudeHealthStatus {
@@ -461,6 +465,352 @@ http.route({
   }),
 })
 
+// ============ OpenRouter Endpoints ============
+
+/**
+ * OpenRouter chat endpoint - streams LLM response with SSE.
+ * Uses OpenRouter API to access Claude, GPT-4, Llama, and other models.
+ */
+http.route({
+  path: "/api/openrouter/chat",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = await request.json()
+    const { sessionId, prompt, model } = body as {
+      sessionId: string
+      prompt: string
+      model?: string
+    }
+
+    // Validate required fields
+    if (!sessionId || !prompt) {
+      return new Response(
+        JSON.stringify({ error: "sessionId and prompt are required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      )
+    }
+
+    // Check OpenRouter availability
+    const openRouterStatus = await checkOpenRouterHealth()
+    if (!openRouterStatus.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "OpenRouter is not available",
+          details: openRouterStatus.error,
+        }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      )
+    }
+
+    // Get blocks for context assembly
+    const blocks = await ctx.runQuery(api.blocks.list, {
+      sessionId: sessionId as Id<"sessions">,
+    })
+
+    // Extract system prompt from blocks (first system_prompt block in PERMANENT zone)
+    const systemPrompt = extractSystemPromptFromBlocks(blocks)
+
+    // Assemble context (PERMANENT → STABLE → WORKING), excludes system_prompt blocks
+    const contextMessages = assembleContext(blocks, prompt)
+
+    // Prepend system prompt as first message for OpenRouter
+    const messages = systemPrompt
+      ? [{ role: "system" as const, content: systemPrompt }, ...contextMessages]
+      : contextMessages
+
+    // Create LangFuse trace for observability
+    const startTime = Date.now()
+    const trace = createGeneration(
+      "openrouter-chat",
+      {
+        sessionId,
+        provider: "openrouter",
+        model: model || process.env.OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet",
+      },
+      {
+        systemPrompt,
+        messages,
+      }
+    )
+
+    // Create streaming response using TransformStream
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    const encoder = new TextEncoder()
+
+    // Stream in background (don't await)
+    ;(async () => {
+      try {
+        let fullResponse = ""
+
+        // Stream from OpenRouter
+        for await (const chunk of streamOpenRouter(messages, { model })) {
+          fullResponse += chunk
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "text-delta", delta: chunk })}\n\n`
+            )
+          )
+        }
+
+        // Send finish event
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "finish", finishReason: "stop" })}\n\n`
+          )
+        )
+        await writer.write(encoder.encode("data: [DONE]\n\n"))
+
+        // Auto-save generated content to WORKING zone
+        if (fullResponse.trim()) {
+          await ctx.runMutation(api.blocks.create, {
+            sessionId: sessionId as Id<"sessions">,
+            content: fullResponse,
+            type: "ASSISTANT",
+            zone: "WORKING",
+          })
+        }
+
+        // Complete LangFuse trace
+        const durationMs = Date.now() - startTime
+        trace.complete({
+          text: fullResponse,
+          durationMs,
+        })
+        await flushLangfuse()
+
+        await writer.close()
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error"
+
+        // Record error in LangFuse
+        trace.error(errorMessage)
+        await flushLangfuse()
+
+        try {
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`
+            )
+          )
+        } catch {
+          // Writer may already be closed
+        }
+        await writer.close()
+      }
+    })()
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        ...corsHeaders,
+      },
+    })
+  }),
+})
+
+// Handle CORS preflight for OpenRouter chat endpoint
+http.route({
+  path: "/api/openrouter/chat",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }),
+})
+
+/**
+ * OpenRouter brainstorm endpoint - streams LLM response with conversation history.
+ *
+ * Unlike /api/openrouter/chat, this:
+ * - Accepts conversation history for multi-turn conversations
+ * - Does NOT auto-save to blocks (user manually saves)
+ */
+http.route({
+  path: "/api/openrouter/brainstorm",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = await request.json()
+    const { sessionId, conversationHistory, newMessage, model } = body as {
+      sessionId: string
+      conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+      newMessage: string
+      model?: string
+    }
+
+    // Validate required fields
+    if (!sessionId || !newMessage) {
+      return new Response(
+        JSON.stringify({ error: "sessionId and newMessage are required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      )
+    }
+
+    // Check OpenRouter availability
+    const openRouterStatus = await checkOpenRouterHealth()
+    if (!openRouterStatus.ok) {
+      return new Response(
+        JSON.stringify({
+          error: "OpenRouter is not available",
+          details: openRouterStatus.error,
+        }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      )
+    }
+
+    // Get blocks for context assembly
+    const blocks = await ctx.runQuery(api.blocks.list, {
+      sessionId: sessionId as Id<"sessions">,
+    })
+
+    // Extract system prompt from blocks (first system_prompt block in PERMANENT zone)
+    const systemPrompt = extractSystemPromptFromBlocks(blocks)
+
+    // Assemble context with conversation history (excludes system_prompt blocks)
+    const contextMessages = assembleContextWithConversation(
+      blocks,
+      conversationHistory || [],
+      newMessage
+    )
+
+    // Prepend system prompt as first message for OpenRouter
+    const messages = systemPrompt
+      ? [{ role: "system" as const, content: systemPrompt }, ...contextMessages]
+      : contextMessages
+
+    // Create LangFuse trace for observability
+    const startTime = Date.now()
+    const trace = createGeneration(
+      "openrouter-brainstorm",
+      {
+        sessionId,
+        provider: "openrouter",
+        model: model || process.env.OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet",
+      },
+      {
+        systemPrompt,
+        messages,
+      }
+    )
+
+    // Create streaming response using TransformStream
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    const encoder = new TextEncoder()
+
+    // Stream in background (don't await)
+    ;(async () => {
+      try {
+        let fullResponse = ""
+
+        // Stream from OpenRouter
+        for await (const chunk of streamOpenRouter(messages, { model })) {
+          fullResponse += chunk
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "text-delta", delta: chunk })}\n\n`
+            )
+          )
+        }
+
+        // Send finish event with full response (for client to add to conversation)
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "finish", finishReason: "stop", fullText: fullResponse })}\n\n`
+          )
+        )
+        await writer.write(encoder.encode("data: [DONE]\n\n"))
+
+        // NOTE: No auto-save for brainstorm - user manually saves messages
+
+        // Complete LangFuse trace
+        const durationMs = Date.now() - startTime
+        trace.complete({
+          text: fullResponse,
+          durationMs,
+        })
+        await flushLangfuse()
+
+        await writer.close()
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error"
+
+        // Record error in LangFuse
+        trace.error(errorMessage)
+        await flushLangfuse()
+
+        try {
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`
+            )
+          )
+        } catch {
+          // Writer may already be closed
+        }
+        await writer.close()
+      }
+    })()
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        ...corsHeaders,
+      },
+    })
+  }),
+})
+
+// Handle CORS preflight for OpenRouter brainstorm endpoint
+http.route({
+  path: "/api/openrouter/brainstorm",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }),
+})
+
+// OpenRouter health check endpoint
+http.route({
+  path: "/api/health/openrouter",
+  method: "GET",
+  handler: httpAction(async () => {
+    const status = await checkOpenRouterHealth()
+    return new Response(JSON.stringify(status), {
+      status: status.ok ? 200 : 503,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    })
+  }),
+})
+
+// Handle CORS preflight for OpenRouter health endpoint
+http.route({
+  path: "/api/health/openrouter",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }),
+})
+
+// ============ Health Check Endpoints ============
+
 // Ollama health check endpoint
 http.route({
   path: "/api/health/ollama",
@@ -510,15 +860,17 @@ http.route({
   path: "/api/health",
   method: "GET",
   handler: httpAction(async (ctx) => {
-    const [ollamaStatus, claudeStatus] = await Promise.all([
+    const [ollamaStatus, claudeStatus, openRouterStatus] = await Promise.all([
       checkOllamaHealth(),
       ctx.runAction(api.claudeNode.checkHealth, {}) as Promise<ClaudeHealthStatus>,
+      checkOpenRouterHealth(),
     ])
 
     return new Response(
       JSON.stringify({
         ollama: ollamaStatus,
         claude: claudeStatus,
+        openrouter: openRouterStatus,
       }),
       {
         status: 200,

@@ -17,6 +17,7 @@ import type * as http from "../http.js";
 import type * as lib_context from "../lib/context.js";
 import type * as lib_langfuse from "../lib/langfuse.js";
 import type * as lib_ollama from "../lib/ollama.js";
+import type * as lib_openrouter from "../lib/openrouter.js";
 import type * as lib_tokenizer from "../lib/tokenizer.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as metrics from "../metrics.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/context": typeof lib_context;
   "lib/langfuse": typeof lib_langfuse;
   "lib/ollama": typeof lib_ollama;
+  "lib/openrouter": typeof lib_openrouter;
   "lib/tokenizer": typeof lib_tokenizer;
   "lib/validators": typeof lib_validators;
   metrics: typeof metrics;

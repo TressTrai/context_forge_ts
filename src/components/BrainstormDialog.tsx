@@ -18,6 +18,7 @@ interface BrainstormDialogProps {
   providerHealth?: {
     ollama: { ok: boolean } | null
     claude: { ok: boolean } | null
+    openrouter: { ok: boolean } | null
   }
   systemPrompt?: string
 }
@@ -250,7 +251,9 @@ export function BrainstormDialog({
   const isProviderAvailable =
     provider === "ollama"
       ? providerHealth?.ollama?.ok ?? true
-      : providerHealth?.claude?.ok ?? true
+      : provider === "openrouter"
+        ? providerHealth?.openrouter?.ok ?? true
+        : providerHealth?.claude?.ok ?? true
 
   // Disable provider change after first message
   const canChangeProvider = messages.length === 0
@@ -276,6 +279,9 @@ export function BrainstormDialog({
               </option>
               <option value="ollama" disabled={!providerHealth?.ollama?.ok}>
                 Ollama {providerHealth?.ollama?.ok ? "" : "(offline)"}
+              </option>
+              <option value="openrouter" disabled={!providerHealth?.openrouter?.ok}>
+                OpenRouter {providerHealth?.openrouter?.ok ? "" : "(offline)"}
               </option>
             </select>
             {/* System prompt indicator */}

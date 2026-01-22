@@ -9,6 +9,7 @@ import type { Id } from "../../convex/_generated/dataModel"
 interface ProviderHealth {
   ollama: { ok: boolean; error?: string } | null
   claude: { ok: boolean; error?: string; version?: string } | null
+  openrouter: { ok: boolean; configured?: boolean; error?: string; model?: string } | null
 }
 
 // Check provider health on mount
@@ -16,6 +17,7 @@ function useProviderHealth() {
   const [health, setHealth] = useState<ProviderHealth>({
     ollama: null,
     claude: null,
+    openrouter: null,
   })
 
   useEffect(() => {
@@ -34,6 +36,7 @@ function useProviderHealth() {
         setHealth({
           ollama: { ok: false, error: "Failed to check" },
           claude: { ok: false, error: "Failed to check" },
+          openrouter: { ok: false, error: "Failed to check" },
         })
       }
     }
@@ -145,6 +148,7 @@ export function BrainstormPanel({ sessionId }: BrainstormPanelProps) {
           <div className="flex items-center gap-2">
             {getProviderStatus("Ollama", health.ollama)}
             {getProviderStatus("Claude", health.claude)}
+            {getProviderStatus("OpenRouter", health.openrouter)}
           </div>
         </div>
 
@@ -158,7 +162,7 @@ export function BrainstormPanel({ sessionId }: BrainstormPanelProps) {
           </Button>
           <Button
             onClick={() => brainstorm.open()}
-            disabled={!health.claude?.ok && !health.ollama?.ok}
+            disabled={!health.claude?.ok && !health.ollama?.ok && !health.openrouter?.ok}
           >
             {brainstorm.messages.length > 0
               ? `Continue (${brainstorm.messages.length} msgs)`
