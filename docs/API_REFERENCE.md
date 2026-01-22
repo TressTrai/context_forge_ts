@@ -839,13 +839,22 @@ const templateId = await createTemplate({
 
 #### `templates.createFromSession`
 
-Create a template from an existing session.
+Create a template from an existing session, or overwrite an existing template.
 
 ```typescript
+// Create new template
 const templateId = await createFromSession({
   sessionId,
   name: "My Template",
   description: "Captured from session",
+})
+
+// Overwrite existing template
+await createFromSession({
+  sessionId,
+  name: "Updated Template",
+  description: "Updated description",
+  overwriteTemplateId: existingTemplateId,
 })
 ```
 
@@ -854,6 +863,7 @@ const templateId = await createFromSession({
 | `sessionId` | `Id<"sessions">` | Yes | Source session |
 | `name` | `string` | Yes | Template name |
 | `description` | `string` | No | Description |
+| `overwriteTemplateId` | `Id<"templates">` | No | Template to overwrite (updates instead of creates) |
 
 **Returns:** `Id<"templates">`
 
@@ -1699,7 +1709,6 @@ interface Template {
   _creationTime: number
   name: string
   description?: string
-  systemPrompt?: string
   blocks: Array<{
     content: string
     type: string

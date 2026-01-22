@@ -36,7 +36,6 @@ export default defineSchema({
   templates: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
-    systemPrompt: v.optional(v.string()),
     // Snapshot of blocks to load when applying template
     blocks: v.array(
       v.object({

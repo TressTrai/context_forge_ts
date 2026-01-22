@@ -255,7 +255,6 @@ Benefits:
   _id: Id<"templates">       // Auto-generated Convex ID
   name: string               // Template name
   description?: string       // Optional description
-  systemPrompt?: string      // Default system prompt
   blocks: Array<{            // Block configurations
     content: string
     type: string

@@ -1,8 +1,8 @@
 /**
  * Templates - Reusable session configurations.
  *
- * Templates capture a session's state (blocks + system prompt) so it can be
- * reapplied to create consistent starting points for workflows.
+ * Templates capture a session's blocks so it can be reapplied to create
+ * consistent starting points for workflows.
  */
 
 import { mutation, query } from "./_generated/server"
@@ -60,18 +60,28 @@ export const create = mutation({
 /**
  * Create a template from an existing session.
  * Snapshots all blocks (including system_prompt blocks).
+ * If overwriteTemplateId is provided, updates that template instead of creating a new one.
  */
 export const createFromSession = mutation({
   args: {
     sessionId: v.id("sessions"),
     name: v.string(),
     description: v.optional(v.string()),
+    overwriteTemplateId: v.optional(v.id("templates")),
   },
   handler: async (ctx, args) => {
     // Get the session
     const session = await ctx.db.get(args.sessionId)
     if (!session) {
       throw new Error("Session not found")
+    }
+
+    // If overwriting, verify the template exists
+    if (args.overwriteTemplateId) {
+      const existing = await ctx.db.get(args.overwriteTemplateId)
+      if (!existing) {
+        throw new Error("Template to overwrite not found")
+      }
     }
 
     // Get all blocks in the session
@@ -98,6 +108,18 @@ export const createFromSession = mutation({
     }))
 
     const now = Date.now()
+
+    // Overwrite existing template or create new one
+    if (args.overwriteTemplateId) {
+      await ctx.db.patch(args.overwriteTemplateId, {
+        name: args.name,
+        description: args.description,
+        blocks: blockSnapshots,
+        updatedAt: now,
+      })
+      return args.overwriteTemplateId
+    }
+
     return await ctx.db.insert("templates", {
       name: args.name,
       description: args.description,

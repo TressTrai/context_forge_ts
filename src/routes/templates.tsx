@@ -77,11 +77,6 @@ function TemplateCard({
             WORKING: {zoneCounts.WORKING}
           </span>
         )}
-        {template.systemPrompt && (
-          <span className="text-xs px-2 py-1 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-            Has System Prompt
-          </span>
-        )}
       </div>
 
       {/* Expandable details */}
@@ -97,17 +92,6 @@ function TemplateCard({
 
         {expanded && (
           <div className="mt-3 space-y-3">
-            {template.systemPrompt && (
-              <div>
-                <div className="text-xs font-medium text-muted-foreground mb-1">
-                  System Prompt:
-                </div>
-                <div className="text-sm p-2 rounded-md bg-muted/50 max-h-32 overflow-auto">
-                  {template.systemPrompt}
-                </div>
-              </div>
-            )}
-
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1">
                 Blocks Preview:
@@ -163,7 +147,7 @@ function TemplateCard({
   )
 }
 
-// Edit template dialog
+// Edit template dialog (metadata only - to edit blocks, load and overwrite)
 function EditTemplateDialog({
   template,
   isOpen,
@@ -175,7 +159,6 @@ function EditTemplateDialog({
 }) {
   const [name, setName] = useState(template.name)
   const [description, setDescription] = useState(template.description ?? "")
-  const [systemPrompt, setSystemPrompt] = useState(template.systemPrompt ?? "")
   const [isLoading, setIsLoading] = useState(false)
 
   const updateTemplate = useMutation(api.templates.update)
@@ -188,7 +171,6 @@ function EditTemplateDialog({
         id: template._id,
         name: name.trim(),
         description: description.trim() || undefined,
-        systemPrompt: systemPrompt.trim() || undefined,
       })
       onClose()
     } finally {
@@ -202,6 +184,9 @@ function EditTemplateDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-semibold mb-4">Edit Template</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          To edit blocks, apply this template to a session, make changes, then save as template to overwrite.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -227,19 +212,6 @@ function EditTemplateDialog({
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="edit-system-prompt" className="block text-sm font-medium mb-1">
-              System Prompt
-            </label>
-            <textarea
-              id="edit-system-prompt"
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              rows={4}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none font-mono"
             />
           </div>
 
