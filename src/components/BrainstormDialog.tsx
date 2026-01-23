@@ -19,7 +19,7 @@ interface BrainstormDialogProps {
   error: string | null
   providerHealth?: {
     ollama: { ok: boolean } | null
-    claude: { ok: boolean } | null
+    claude: { ok: boolean; disabled?: boolean } | null
     openrouter: { ok: boolean } | null
   }
   systemPrompt?: string
@@ -347,13 +347,13 @@ export function BrainstormDialog({
     }
   }
 
-  // Check if provider is available
+  // Check if provider is available (Claude is not available if disabled)
   const isProviderAvailable =
     provider === "ollama"
       ? providerHealth?.ollama?.ok ?? true
       : provider === "openrouter"
         ? providerHealth?.openrouter?.ok ?? true
-        : providerHealth?.claude?.ok ?? true
+        : (providerHealth?.claude?.ok && !providerHealth?.claude?.disabled) ?? true
 
   // Disable provider change after first message
   const canChangeProvider = messages.length === 0
@@ -374,9 +374,12 @@ export function BrainstormDialog({
               disabled={!canChangeProvider || isStreaming}
               className="text-sm border border-input rounded-md px-2 py-1 bg-background disabled:opacity-50"
             >
-              <option value="claude" disabled={!providerHealth?.claude?.ok}>
-                Claude {providerHealth?.claude?.ok ? "" : "(offline)"}
-              </option>
+              {/* Only show Claude if not disabled */}
+              {!providerHealth?.claude?.disabled && (
+                <option value="claude" disabled={!providerHealth?.claude?.ok}>
+                  Claude {providerHealth?.claude?.ok ? "" : "(offline)"}
+                </option>
+              )}
               <option value="ollama" disabled={!providerHealth?.ollama?.ok}>
                 Ollama {providerHealth?.ollama?.ok ? "" : "(offline)"}
               </option>
@@ -384,8 +387,8 @@ export function BrainstormDialog({
                 OpenRouter {providerHealth?.openrouter?.ok ? "" : "(offline)"}
               </option>
             </select>
-            {/* Claude: disable agent behavior toggle */}
-            {provider === "claude" && onDisableAgentBehaviorChange && (
+            {/* Claude: disable agent behavior toggle (only when Claude is enabled) */}
+            {provider === "claude" && onDisableAgentBehaviorChange && !providerHealth?.claude?.disabled && (
               <label
                 className="inline-flex items-center gap-1.5 text-xs cursor-pointer"
                 title="When enabled, appends instructions to prevent Claude from pretending to have tool access"

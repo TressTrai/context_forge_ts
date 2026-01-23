@@ -224,7 +224,9 @@ function SessionCard({
           )}
         </div>
         <div className="text-xs text-muted-foreground whitespace-nowrap">
-          {formatTimeAgo(session.updatedAt ?? session.createdAt ?? Date.now())}
+          {session.updatedAt ?? session.createdAt
+            ? formatTimeAgo(session.updatedAt ?? session.createdAt!)
+            : ""}
         </div>
       </div>
 
@@ -377,7 +379,6 @@ function ProjectDashboard() {
             {project.workflow.steps.map((step, index) => {
               const isCompleted = (project.currentStep ?? 0) > index
               const isCurrent = project.currentStep === index
-              const isPending = (project.currentStep ?? 0) < index
 
               return (
                 <div key={index} className="flex items-center">

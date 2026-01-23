@@ -13,7 +13,6 @@ import {
   getBlockTypesByCategory,
   CATEGORY_LABELS,
   isValidBlockType,
-  type BlockType,
 } from "@/lib/blockTypes"
 
 // Format date for display

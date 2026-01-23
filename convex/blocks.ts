@@ -4,6 +4,7 @@ import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 import { zoneValidator, type Zone } from "./lib/validators"
 import { countTokens, DEFAULT_TOKEN_MODEL } from "./lib/tokenizer"
+import { canAccessSession, requireSessionAccess } from "./lib/auth"
 
 // ============ Internal functions (for use by other Convex functions) ============
 
@@ -44,6 +45,12 @@ async function getNextPosition(
 export const list = query({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
+    // Check session access
+    const hasAccess = await canAccessSession(ctx, args.sessionId)
+    if (!hasAccess) {
+      return []
+    }
+
     return await ctx.db
       .query("blocks")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
@@ -59,6 +66,12 @@ export const listByZone = query({
     zone: zoneValidator,
   },
   handler: async (ctx, args) => {
+    // Check session access
+    const hasAccess = await canAccessSession(ctx, args.sessionId)
+    if (!hasAccess) {
+      return []
+    }
+
     return await ctx.db
       .query("blocks")
       .withIndex("by_session_zone", (q) =>
@@ -72,7 +85,16 @@ export const listByZone = query({
 export const get = query({
   args: { id: v.id("blocks") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id)
+    const block = await ctx.db.get(args.id)
+    if (!block) return null
+
+    // Check session access
+    const hasAccess = await canAccessSession(ctx, block.sessionId)
+    if (!hasAccess) {
+      return null
+    }
+
+    return block
   },
 })
 
@@ -86,7 +108,9 @@ export const create = mutation({
     testData: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    // Verify session exists
+    // Verify session exists and user has access
+    await requireSessionAccess(ctx, args.sessionId)
+
     const session = await ctx.db.get(args.sessionId)
     if (!session) throw new Error("Session not found")
 
@@ -127,6 +151,9 @@ export const move = mutation({
     const block = await ctx.db.get(args.id)
     if (!block) throw new Error("Block not found")
 
+    // Check session access
+    await requireSessionAccess(ctx, block.sessionId)
+
     // If already in target zone, do nothing
     if (block.zone === args.zone) return block._id
 
@@ -158,6 +185,9 @@ export const reorder = mutation({
     const block = await ctx.db.get(args.id)
     if (!block) throw new Error("Block not found")
 
+    // Check session access
+    await requireSessionAccess(ctx, block.sessionId)
+
     const now = Date.now()
 
     // Simply update the block's position (fractional ordering)
@@ -183,6 +213,9 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const block = await ctx.db.get(args.id)
     if (!block) throw new Error("Block not found")
+
+    // Check session access
+    await requireSessionAccess(ctx, block.sessionId)
 
     const now = Date.now()
     const updates: {
@@ -220,6 +253,8 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const block = await ctx.db.get(args.id)
     if (block) {
+      // Check session access
+      await requireSessionAccess(ctx, block.sessionId)
       // Update session's updatedAt before deleting
       await ctx.db.patch(block.sessionId, { updatedAt: Date.now() })
     }

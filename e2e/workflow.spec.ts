@@ -30,8 +30,9 @@ async function createTestSession(name: string = "Test Session") {
   return response.json() as Promise<{ id: string }>
 }
 
-// Helper to create a test block
-async function createTestBlock(
+// Helper to create a test block (unused but kept for future tests)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _createTestBlock(
   sessionId: string,
   content: string,
   type: string = "note",

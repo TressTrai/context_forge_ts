@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server"
 import type { MutationCtx } from "./_generated/server"
 import type { Id } from "./_generated/dataModel"
 import { v } from "convex/values"
+import { getOptionalUserId, requireSessionAccess } from "./lib/auth"
 
 // ============ Helper Functions ============
 
@@ -54,19 +55,39 @@ async function cascadeDeleteSessions(
 
 // ============ Queries ============
 
-// List all sessions
+// List all sessions for the current user
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("sessions").order("desc").collect()
+    const userId = await getOptionalUserId(ctx)
+
+    // If authenticated, show only user's sessions
+    // If not authenticated, show sessions without userId (legacy/anonymous)
+    const sessions = await ctx.db.query("sessions").order("desc").collect()
+
+    if (userId) {
+      return sessions.filter((s) => s.userId === userId || !s.userId)
+    }
+
+    // Unauthenticated users see only sessions without userId
+    return sessions.filter((s) => !s.userId)
   },
 })
 
-// Get a single session by ID
+// Get a single session by ID (with access control)
 export const get = query({
   args: { id: v.id("sessions") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id)
+    const session = await ctx.db.get(args.id)
+    if (!session) return null
+
+    // Check access
+    const userId = await getOptionalUserId(ctx)
+    if (session.userId && session.userId !== userId) {
+      return null // User doesn't have access
+    }
+
+    return session
   },
 })
 
@@ -78,8 +99,10 @@ export const create = mutation({
     name: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     return await ctx.db.insert("sessions", {
+      userId: userId ?? undefined,
       name: args.name,
       createdAt: now,
       updatedAt: now,
@@ -95,6 +118,8 @@ export const update = mutation({
     systemPrompt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireSessionAccess(ctx, args.id)
+
     const session = await ctx.db.get(args.id)
     if (!session) throw new Error("Session not found")
 
@@ -111,6 +136,8 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("sessions") },
   handler: async (ctx, args) => {
+    await requireSessionAccess(ctx, args.id)
+
     // Delete all blocks in this session
     const blocks = await ctx.db
       .query("blocks")
@@ -143,19 +170,27 @@ export const remove = mutation({
   },
 })
 
-// Delete all sessions (and their blocks, snapshots, generations)
+// Delete all sessions for the current user (and their blocks, snapshots, generations)
 // Uses bulk fetches to avoid N+1 queries
 export const removeAll = mutation({
   args: {},
   handler: async (ctx) => {
-    const sessions = await ctx.db.query("sessions").collect()
+    const userId = await getOptionalUserId(ctx)
+
+    const allSessions = await ctx.db.query("sessions").collect()
+
+    // Filter to only sessions the user owns or legacy sessions (no userId)
+    const sessions = userId
+      ? allSessions.filter((s) => s.userId === userId || !s.userId)
+      : allSessions.filter((s) => !s.userId)
+
     const sessionIds = new Set(sessions.map((s) => s._id))
 
     // Cascade delete using bulk fetches (avoids N+1)
     const { deletedBlocks, deletedSnapshots, deletedGenerations } =
       await cascadeDeleteSessions(ctx, sessionIds)
 
-    // Delete all sessions
+    // Delete filtered sessions
     for (const session of sessions) {
       await ctx.db.delete(session._id)
     }
@@ -169,13 +204,20 @@ export const removeAll = mutation({
   },
 })
 
-// Delete all sessions matching a name (and their blocks, snapshots, generations)
+// Delete all sessions matching a name for current user (and their blocks, snapshots, generations)
 // Uses bulk fetches to avoid N+1 queries
 export const removeByName = mutation({
   args: { name: v.string() },
   handler: async (ctx, args) => {
-    const sessions = await ctx.db.query("sessions").collect()
-    const matching = sessions.filter((s) => s.name === args.name)
+    const userId = await getOptionalUserId(ctx)
+
+    const allSessions = await ctx.db.query("sessions").collect()
+
+    // Filter to user's sessions (or legacy) that match the name
+    const matching = allSessions.filter((s) => {
+      const isOwned = userId ? (s.userId === userId || !s.userId) : !s.userId
+      return isOwned && s.name === args.name
+    })
 
     if (matching.length === 0) {
       return { deletedSessions: 0, deletedBlocks: 0, deletedSnapshots: 0, deletedGenerations: 0 }
@@ -205,6 +247,8 @@ export const removeByName = mutation({
 export const clear = mutation({
   args: { id: v.id("sessions") },
   handler: async (ctx, args) => {
+    await requireSessionAccess(ctx, args.id)
+
     const session = await ctx.db.get(args.id)
     if (!session) throw new Error("Session not found")
 
@@ -234,6 +278,12 @@ export const getWorkflowContext = query({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId)
     if (!session || !session.projectId || session.stepNumber === undefined) {
+      return null
+    }
+
+    // Check access
+    const userId = await getOptionalUserId(ctx)
+    if (session.userId && session.userId !== userId) {
       return null
     }
 
@@ -288,6 +338,8 @@ export const getWorkflowContext = query({
 export const goToNextStep = mutation({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
+    await requireSessionAccess(ctx, args.sessionId)
+
     const session = await ctx.db.get(args.sessionId)
     if (!session || !session.projectId || session.stepNumber === undefined) {
       throw new Error("Session is not part of a workflow")
@@ -327,8 +379,10 @@ export const goToNextStep = mutation({
     // Create new session for the next step
     const nextStep = workflow.steps[nextStepIndex]
     const now = Date.now()
+    const userId = await getOptionalUserId(ctx)
 
     const newSessionId = await ctx.db.insert("sessions", {
+      userId: userId ?? undefined,
       name: `${project.name} - ${nextStep.name}`,
       projectId: session.projectId,
       stepNumber: nextStepIndex,

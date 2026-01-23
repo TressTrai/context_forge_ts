@@ -9,7 +9,6 @@ import {
   getBlockTypeMetadata,
   isValidBlockType,
   CATEGORY_LABELS,
-  type BlockType,
 } from "./blockTypes"
 
 describe("BLOCK_TYPES", () => {

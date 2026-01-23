@@ -6,6 +6,7 @@ import { useGenerate } from "@/hooks/useGenerate"
 import { useClaudeGenerate } from "@/hooks/useClaudeGenerate"
 import { GenerationUsage } from "@/components/metrics"
 import type { Id } from "../../convex/_generated/dataModel"
+import * as ollamaClient from "@/lib/llm/ollama"
 
 type Provider = "ollama" | "claude"
 
@@ -15,10 +16,10 @@ interface GeneratePanelProps {
 
 interface ProviderHealth {
   ollama: { ok: boolean; error?: string } | null
-  claude: { ok: boolean; error?: string; version?: string } | null
+  claude: { ok: boolean; error?: string; version?: string; disabled?: boolean } | null
 }
 
-// Check provider health on mount
+// Check provider health on mount (client-side for Ollama, backend for Claude)
 function useProviderHealth() {
   const [health, setHealth] = useState<ProviderHealth>({
     ollama: null,
@@ -27,22 +28,31 @@ function useProviderHealth() {
 
   useEffect(() => {
     const checkHealth = async () => {
+      // Check Ollama (client-side)
+      const ollamaHealth = await ollamaClient.checkHealth()
+
+      // Check Claude Code (backend)
+      let claudeHealth: { ok: boolean; error?: string; version?: string } | null = null
       try {
         const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
         const baseUrl = convexUrl
           ? convexUrl.replace(":3210", ":3211")
           : "http://127.0.0.1:3211"
 
-        const response = await fetch(`${baseUrl}/api/health`)
-        const data = (await response.json()) as ProviderHealth
-        setHealth(data)
-      } catch (err) {
-        console.error("Failed to check provider health:", err)
-        setHealth({
-          ollama: { ok: false, error: "Failed to check" },
-          claude: { ok: false, error: "Failed to check" },
-        })
+        const response = await fetch(`${baseUrl}/api/health/claude`)
+        if (response.ok) {
+          claudeHealth = await response.json()
+        } else {
+          claudeHealth = { ok: false, error: "Claude Code not available" }
+        }
+      } catch {
+        claudeHealth = { ok: false, error: "Failed to check Claude Code" }
       }
+
+      setHealth({
+        ollama: ollamaHealth,
+        claude: claudeHealth,
+      })
     }
 
     checkHealth()
@@ -138,9 +148,12 @@ export function GeneratePanel({ sessionId }: GeneratePanelProps) {
     }
   }
 
+  // Check if Claude is disabled via feature flag
+  const isClaudeDisabled = health.claude?.disabled === true
+
   // Check if selected provider is available
   const isProviderAvailable =
-    provider === "ollama" ? health.ollama?.ok : health.claude?.ok
+    provider === "ollama" ? health.ollama?.ok : (health.claude?.ok && !isClaudeDisabled)
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
@@ -150,7 +163,8 @@ export function GeneratePanel({ sessionId }: GeneratePanelProps) {
           {/* Provider status indicators */}
           <div className="flex items-center gap-2">
             <ProviderStatus name="Ollama" status={health.ollama} />
-            <ProviderStatus name="Claude" status={health.claude} />
+            {/* Only show Claude if not disabled */}
+            {!isClaudeDisabled && <ProviderStatus name="Claude" status={health.claude} />}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -177,9 +191,12 @@ export function GeneratePanel({ sessionId }: GeneratePanelProps) {
             <option value="ollama" disabled={!health.ollama?.ok}>
               Ollama (Local){health.ollama?.ok ? "" : " - offline"}
             </option>
-            <option value="claude" disabled={!health.claude?.ok}>
-              Claude Code (Subscription){health.claude?.ok ? "" : " - offline"}
-            </option>
+            {/* Only show Claude option if not disabled */}
+            {!isClaudeDisabled && (
+              <option value="claude" disabled={!health.claude?.ok}>
+                Claude Code (Subscription){health.claude?.ok ? "" : " - offline"}
+              </option>
+            )}
           </select>
         </div>
 

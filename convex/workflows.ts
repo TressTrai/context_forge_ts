@@ -7,6 +7,12 @@
 
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import {
+  getOptionalUserId,
+  canAccessWorkflow,
+  canAccessProject,
+  requireSessionAccess,
+} from "./lib/auth"
 
 const zoneArray = v.array(
   v.union(v.literal("PERMANENT"), v.literal("STABLE"), v.literal("WORKING"))
@@ -20,12 +26,21 @@ const stepValidator = v.object({
 })
 
 /**
- * List all workflows.
+ * List all workflows for the current user.
  */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("workflows").order("desc").collect()
+    const userId = await getOptionalUserId(ctx)
+
+    const allWorkflows = await ctx.db.query("workflows").order("desc").collect()
+
+    // Filter to user's workflows or legacy workflows
+    if (userId) {
+      return allWorkflows.filter((w) => w.userId === userId || !w.userId)
+    }
+
+    return allWorkflows.filter((w) => !w.userId)
   },
 })
 
@@ -35,6 +50,9 @@ export const list = query({
 export const get = query({
   args: { id: v.id("workflows") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.id)
+    if (!hasAccess) return null
+
     const workflow = await ctx.db.get(args.id)
     if (!workflow) return null
 
@@ -69,8 +87,10 @@ export const create = mutation({
     steps: v.optional(v.array(stepValidator)),
   },
   handler: async (ctx, args) => {
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     return await ctx.db.insert("workflows", {
+      userId: userId ?? undefined,
       name: args.name,
       description: args.description,
       steps: args.steps ?? [],
@@ -90,6 +110,11 @@ export const update = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.id)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -110,6 +135,11 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("workflows") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     // Unlink any projects using this workflow
     const projects = await ctx.db.query("projects").collect()
     for (const project of projects) {
@@ -135,6 +165,11 @@ export const addStep = mutation({
     position: v.optional(v.number()), // Insert at position (default: end)
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -173,6 +208,11 @@ export const updateStep = mutation({
     carryForwardZones: v.optional(zoneArray),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -210,6 +250,11 @@ export const removeStep = mutation({
     stepIndex: v.number(),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -238,6 +283,11 @@ export const reorderSteps = mutation({
     toIndex: v.number(),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -275,6 +325,11 @@ export const startProject = mutation({
     projectDescription: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
@@ -284,11 +339,13 @@ export const startProject = mutation({
       throw new Error("Workflow has no steps")
     }
 
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     const firstStep = workflow.steps[0]
 
     // Create the project
     const projectId = await ctx.db.insert("projects", {
+      userId: userId ?? undefined,
       name: args.projectName,
       description: args.projectDescription,
       workflowId: args.workflowId,
@@ -299,6 +356,7 @@ export const startProject = mutation({
 
     // Create the first session
     const sessionId = await ctx.db.insert("sessions", {
+      userId: userId ?? undefined,
       name: `${args.projectName} - ${firstStep.name}`,
       projectId,
       stepNumber: 0,
@@ -339,6 +397,14 @@ export const advanceStep = mutation({
     previousSessionId: v.id("sessions"),
   },
   handler: async (ctx, args) => {
+    // Check access to project and session
+    const hasProjectAccess = await canAccessProject(ctx, args.projectId)
+    if (!hasProjectAccess) {
+      throw new Error("Project not found or access denied")
+    }
+
+    await requireSessionAccess(ctx, args.previousSessionId)
+
     const project = await ctx.db.get(args.projectId)
     if (!project) {
       throw new Error("Project not found")
@@ -353,6 +419,7 @@ export const advanceStep = mutation({
       throw new Error("Workflow not found")
     }
 
+    const userId = await getOptionalUserId(ctx)
     const currentStep = project.currentStep ?? 0
     const nextStepIndex = currentStep + 1
 
@@ -365,6 +432,7 @@ export const advanceStep = mutation({
 
     // Create new session for the next step
     const sessionId = await ctx.db.insert("sessions", {
+      userId: userId ?? undefined,
       name: `${project.name} - ${nextStep.name}`,
       projectId: args.projectId,
       stepNumber: nextStepIndex,
@@ -449,13 +517,20 @@ export const clone = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
+    if (!hasAccess) {
+      throw new Error("Workflow not found or access denied")
+    }
+
     const workflow = await ctx.db.get(args.workflowId)
     if (!workflow) {
       throw new Error("Workflow not found")
     }
 
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     return await ctx.db.insert("workflows", {
+      userId: userId ?? undefined,
       name: args.name,
       description: workflow.description,
       steps: workflow.steps,

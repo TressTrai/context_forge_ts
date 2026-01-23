@@ -2,6 +2,13 @@ import { useState, useCallback, useEffect, useRef } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
+import * as ollamaClient from "@/lib/llm/ollama"
+import * as openrouterClient from "@/lib/llm/openrouter"
+import {
+  assembleContextWithConversation,
+  extractSystemPromptFromBlocks,
+  NO_TOOLS_SUFFIX,
+} from "@/lib/llm/context"
 
 export type Provider = "ollama" | "claude" | "openrouter"
 export type Zone = "PERMANENT" | "STABLE" | "WORKING"
@@ -56,30 +63,13 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
-// Get brainstorm API URL for Ollama
-function getBrainstormApiUrl(): string {
-  const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
-  if (convexUrl) {
-    return convexUrl.replace(":3210", ":3211") + "/api/brainstorm"
-  }
-  return "http://127.0.0.1:3211/api/brainstorm"
-}
-
-// Get brainstorm API URL for OpenRouter
-function getOpenRouterBrainstormApiUrl(): string {
-  const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
-  if (convexUrl) {
-    return convexUrl.replace(":3210", ":3211") + "/api/openrouter/brainstorm"
-  }
-  return "http://127.0.0.1:3211/api/openrouter/brainstorm"
-}
-
 /**
  * Hook for multi-turn brainstorming conversations with LLMs.
  *
- * Supports both providers:
- * - Claude: Uses Convex reactive streaming via mutations
- * - Ollama: Uses HTTP/SSE streaming via /api/brainstorm endpoint
+ * Supports three providers:
+ * - Claude: Uses Convex reactive streaming via mutations (backend)
+ * - Ollama: Uses client-side direct calls
+ * - OpenRouter: Uses client-side direct calls
  */
 export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResult {
   const { sessionId, onError, defaultDisableAgentBehavior = true } = options
@@ -101,8 +91,11 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
   // Track previous text for Claude chunk detection
   const prevTextRef = useRef("")
 
-  // Abort controller for Ollama HTTP streaming
+  // Abort controller for client-side streaming
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Get blocks for context assembly (client-side)
+  const blocks = useQuery(api.blocks.list, { sessionId })
 
   // Clear conversation when session changes
   useEffect(() => {
@@ -191,214 +184,125 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     abortControllerRef.current?.abort()
   }, [])
 
-  // Send message via Ollama (HTTP streaming)
-  // System prompt is now extracted from blocks by the backend
+  // Send message via Ollama (client-side streaming)
   const sendMessageOllama = useCallback(
-    async (content: string) => {
-      abortControllerRef.current = new AbortController()
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+      if (!blocks) {
+        throw new Error("Blocks not loaded yet")
+      }
+
+      // Assemble context with blocks and conversation
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content)
+
+      // Extract system prompt if present
+      const systemPrompt = extractSystemPromptFromBlocks(blocks)
+
+      // Build messages for Ollama
+      const ollamaMessages: ollamaClient.OllamaMessage[] = []
+
+      // Add system prompt first if present
+      if (systemPrompt) {
+        ollamaMessages.push({
+          role: "system",
+          content: systemPrompt,
+        })
+      }
+
+      // Add context messages
+      for (const msg of contextMessages) {
+        ollamaMessages.push({
+          role: msg.role,
+          content: msg.content,
+        })
+      }
+
+      let fullText = ""
 
       try {
-        const conversationHistory = messages.map((msg) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        }))
+        const generator = ollamaClient.streamChat(ollamaMessages)
 
-        const response = await fetch(getBrainstormApiUrl(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            conversationHistory,
-            newMessage: content,
-          }),
-          signal: abortControllerRef.current.signal,
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(
-            (errorData as { error?: string }).error ||
-              `HTTP ${response.status}: ${response.statusText}`
-          )
+        for await (const chunk of generator) {
+          fullText += chunk
+          setStreamingText(fullText)
         }
 
-        if (!response.body) {
-          throw new Error("No response body")
-        }
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-        let fullText = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n\n")
-          buffer = lines.pop() || ""
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue
-            const data = line.slice(6)
-
-            if (data === "[DONE]") continue
-
-            try {
-              const parsed = JSON.parse(data) as {
-                type: string
-                delta?: string
-                fullText?: string
-                error?: string
-              }
-
-              if (parsed.type === "text-delta" && parsed.delta) {
-                fullText += parsed.delta
-                setStreamingText(fullText)
-              } else if (parsed.type === "error") {
-                throw new Error(parsed.error || "Unknown streaming error")
-              } else if (parsed.type === "finish") {
-                // Add assistant message to conversation
-                if (fullText.trim()) {
-                  const assistantMessage: Message = {
-                    id: generateId(),
-                    role: "assistant",
-                    content: fullText,
-                    timestamp: Date.now(),
-                  }
-                  setMessages((prev) => [...prev, assistantMessage])
-                }
-              }
-            } catch (parseError) {
-              if (
-                parseError instanceof Error &&
-                parseError.message !== "Unknown streaming error"
-              ) {
-                continue
-              }
-              throw parseError
-            }
+        // Add assistant message to conversation
+        if (fullText.trim()) {
+          const assistantMessage: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: fullText,
+            timestamp: Date.now(),
           }
+          setMessages((prev) => [...prev, assistantMessage])
         }
-      } catch (err) {
-        if ((err as Error).name === "AbortError") {
-          return // User stopped - not an error
-        }
-        throw err
       } finally {
         setStreamingText("")
-        abortControllerRef.current = null
       }
     },
-    [sessionId, messages]
+    [blocks]
   )
 
-  // Send message via OpenRouter (HTTP streaming, similar to Ollama)
-  // System prompt is now extracted from blocks by the backend
+  // Send message via OpenRouter (client-side streaming)
   const sendMessageOpenRouter = useCallback(
-    async (content: string) => {
-      abortControllerRef.current = new AbortController()
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+      if (!blocks) {
+        throw new Error("Blocks not loaded yet")
+      }
+
+      // Assemble context with blocks and conversation
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content)
+
+      // Extract system prompt if present
+      const systemPrompt = extractSystemPromptFromBlocks(blocks)
+
+      // Build messages for OpenRouter
+      const openrouterMessages: openrouterClient.OpenRouterMessage[] = []
+
+      // Add system prompt first if present (with no-tools suffix for consistency)
+      if (systemPrompt) {
+        openrouterMessages.push({
+          role: "system",
+          content: systemPrompt + NO_TOOLS_SUFFIX,
+        })
+      }
+
+      // Add context messages
+      for (const msg of contextMessages) {
+        openrouterMessages.push({
+          role: msg.role,
+          content: msg.content,
+        })
+      }
+
+      let fullText = ""
 
       try {
-        const conversationHistory = messages.map((msg) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        }))
+        const generator = openrouterClient.streamChat(openrouterMessages)
 
-        const response = await fetch(getOpenRouterBrainstormApiUrl(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            conversationHistory,
-            newMessage: content,
-          }),
-          signal: abortControllerRef.current.signal,
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(
-            (errorData as { error?: string }).error ||
-              `HTTP ${response.status}: ${response.statusText}`
-          )
+        for await (const chunk of generator) {
+          fullText += chunk
+          setStreamingText(fullText)
         }
 
-        if (!response.body) {
-          throw new Error("No response body")
-        }
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-        let fullText = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n\n")
-          buffer = lines.pop() || ""
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue
-            const data = line.slice(6)
-
-            if (data === "[DONE]") continue
-
-            try {
-              const parsed = JSON.parse(data) as {
-                type: string
-                delta?: string
-                fullText?: string
-                error?: string
-              }
-
-              if (parsed.type === "text-delta" && parsed.delta) {
-                fullText += parsed.delta
-                setStreamingText(fullText)
-              } else if (parsed.type === "error") {
-                throw new Error(parsed.error || "Unknown streaming error")
-              } else if (parsed.type === "finish") {
-                // Add assistant message to conversation
-                if (fullText.trim()) {
-                  const assistantMessage: Message = {
-                    id: generateId(),
-                    role: "assistant",
-                    content: fullText,
-                    timestamp: Date.now(),
-                  }
-                  setMessages((prev) => [...prev, assistantMessage])
-                }
-              }
-            } catch (parseError) {
-              if (
-                parseError instanceof Error &&
-                parseError.message !== "Unknown streaming error"
-              ) {
-                continue
-              }
-              throw parseError
-            }
+        // Add assistant message to conversation
+        if (fullText.trim()) {
+          const assistantMessage: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: fullText,
+            timestamp: Date.now(),
           }
+          setMessages((prev) => [...prev, assistantMessage])
         }
-      } catch (err) {
-        if ((err as Error).name === "AbortError") {
-          return // User stopped - not an error
-        }
-        throw err
       } finally {
         setStreamingText("")
-        abortControllerRef.current = null
       }
     },
-    [sessionId, messages]
+    [blocks]
   )
 
-  // Send message via Claude (Convex mutations)
-  // System prompt is now extracted from blocks by the backend
+  // Send message via Claude (Convex mutations - backend)
   const sendMessageClaude = useCallback(
     async (content: string) => {
       const conversationHistory = messages.map((msg) => ({
@@ -418,12 +322,17 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
   )
 
   // Send a new message (dispatches to correct provider)
-  // System prompt is now extracted from blocks by the backend
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isStreaming) return
 
       setError(null)
+
+      // Build conversation history before adding new message
+      const conversationHistory = messages.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      }))
 
       // Add user message to conversation
       const userMessage: Message = {
@@ -441,9 +350,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       try {
         if (provider === "ollama") {
-          await sendMessageOllama(content.trim())
+          await sendMessageOllama(content.trim(), conversationHistory)
         } else if (provider === "openrouter") {
-          await sendMessageOpenRouter(content.trim())
+          await sendMessageOpenRouter(content.trim(), conversationHistory)
         } else {
           await sendMessageClaude(content.trim())
         }
@@ -458,7 +367,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         }
       }
     },
-    [provider, isStreaming, sendMessageOllama, sendMessageOpenRouter, sendMessageClaude, onError]
+    [provider, isStreaming, messages, sendMessageOllama, sendMessageOpenRouter, sendMessageClaude, onError]
   )
 
   // Save a message as a block
@@ -501,7 +410,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       // Find the user message to retry from
       let userMessage: Message | undefined
-      let truncateIndex: number
+      let truncateIndex: number = 0
 
       if (message.role === "assistant") {
         // Retry an assistant message: find the preceding user message
@@ -520,6 +429,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       if (!userMessage) return
 
+      // Build conversation history up to (but not including) the user message we're retrying
+      const conversationHistory = messages.slice(0, truncateIndex - 1).map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      }))
+
       // Remove this message and all subsequent messages
       setMessages((prev) => prev.slice(0, truncateIndex))
 
@@ -533,9 +448,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       try {
         if (provider === "ollama") {
-          await sendMessageOllama(userMessage.content)
+          await sendMessageOllama(userMessage.content, conversationHistory)
         } else if (provider === "openrouter") {
-          await sendMessageOpenRouter(userMessage.content)
+          await sendMessageOpenRouter(userMessage.content, conversationHistory)
         } else {
           await sendMessageClaude(userMessage.content)
         }
@@ -563,6 +478,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
       const message = messages[messageIndex]
       if (message.role !== "user") return // Can only edit user messages
 
+      // Build conversation history up to (but not including) this message
+      const conversationHistory = messages.slice(0, messageIndex).map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      }))
+
       // Update the message content and remove all subsequent messages
       setMessages((prev) => {
         const updated = prev.slice(0, messageIndex)
@@ -584,9 +505,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       try {
         if (provider === "ollama") {
-          await sendMessageOllama(newContent.trim())
+          await sendMessageOllama(newContent.trim(), conversationHistory)
         } else if (provider === "openrouter") {
-          await sendMessageOpenRouter(newContent.trim())
+          await sendMessageOpenRouter(newContent.trim(), conversationHistory)
         } else {
           await sendMessageClaude(newContent.trim())
         }

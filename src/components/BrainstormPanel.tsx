@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button"
 import { BrainstormDialog } from "@/components/BrainstormDialog"
 import { useBrainstorm, type Zone } from "@/hooks/useBrainstorm"
 import type { Id } from "../../convex/_generated/dataModel"
+import * as ollamaClient from "@/lib/llm/ollama"
+import * as openrouterClient from "@/lib/llm/openrouter"
 
 interface ProviderHealth {
   ollama: { ok: boolean; error?: string } | null
-  claude: { ok: boolean; error?: string; version?: string } | null
+  claude: { ok: boolean; error?: string; version?: string; disabled?: boolean } | null
   openrouter: { ok: boolean; configured?: boolean; error?: string; model?: string } | null
 }
 
-// Check provider health on mount
+// Check provider health on mount (client-side for Ollama/OpenRouter, backend for Claude)
 function useProviderHealth() {
   const [health, setHealth] = useState<ProviderHealth>({
     ollama: null,
@@ -22,23 +24,35 @@ function useProviderHealth() {
 
   useEffect(() => {
     const checkHealth = async () => {
+      // Check Ollama (client-side)
+      const ollamaHealth = await ollamaClient.checkHealth()
+
+      // Check OpenRouter (client-side)
+      const openrouterHealth = await openrouterClient.checkHealth()
+
+      // Check Claude Code (backend - still needed)
+      let claudeHealth: { ok: boolean; error?: string; version?: string } | null = null
       try {
         const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
         const baseUrl = convexUrl
           ? convexUrl.replace(":3210", ":3211")
           : "http://127.0.0.1:3211"
 
-        const response = await fetch(`${baseUrl}/api/health`)
-        const data = (await response.json()) as ProviderHealth
-        setHealth(data)
-      } catch (err) {
-        console.error("Failed to check provider health:", err)
-        setHealth({
-          ollama: { ok: false, error: "Failed to check" },
-          claude: { ok: false, error: "Failed to check" },
-          openrouter: { ok: false, error: "Failed to check" },
-        })
+        const response = await fetch(`${baseUrl}/api/health/claude`)
+        if (response.ok) {
+          claudeHealth = await response.json()
+        } else {
+          claudeHealth = { ok: false, error: "Claude Code not available" }
+        }
+      } catch {
+        claudeHealth = { ok: false, error: "Failed to check Claude Code" }
       }
+
+      setHealth({
+        ollama: ollamaHealth,
+        claude: claudeHealth,
+        openrouter: openrouterHealth,
+      })
     }
 
     checkHealth()
@@ -187,7 +201,8 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
           {/* Provider status indicators */}
           <div className="flex items-center gap-2">
             {getProviderStatus("Ollama", health.ollama)}
-            {getProviderStatus("Claude", health.claude)}
+            {/* Only show Claude if not disabled */}
+            {!health.claude?.disabled && getProviderStatus("Claude", health.claude)}
             {getProviderStatus("OpenRouter", health.openrouter)}
           </div>
         </div>

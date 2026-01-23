@@ -3,10 +3,12 @@
  */
 
 import { useState, useEffect } from "react"
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
+import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router"
 import { TanStackRouterDevtools } from "@tanstack/router-devtools"
-import { useQuery } from "convex/react"
+import { useQuery, Authenticated, Unauthenticated, AuthLoading } from "convex/react"
+import { useAuthActions } from "@convex-dev/auth/react"
 import { api } from "../../convex/_generated/api"
+import type { Doc, Id } from "../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { DndProvider } from "@/components/dnd"
 import { SessionProvider, useSession } from "@/contexts/SessionContext"
@@ -28,6 +30,49 @@ function useTheme() {
   }, [isDark])
 
   return { isDark, toggle: () => setIsDark(!isDark) }
+}
+
+// User menu component
+function UserMenu() {
+  const { signOut } = useAuthActions()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true)
+    try {
+      await signOut()
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleSignOut}
+      disabled={isSigningOut}
+    >
+      {isSigningOut ? "Signing out..." : "Sign Out"}
+    </Button>
+  )
+}
+
+// Auth redirect handler - only redirects to login if not already there
+// Note: This component only renders inside <Unauthenticated>, so auth state is stable
+function AuthRedirect() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // If on login page, don't redirect (avoid redirect loop)
+    if (location.pathname === "/login") return
+    // Redirect to login for unauthenticated users
+    navigate({ to: "/login", replace: true })
+  }, [location.pathname, navigate])
+
+  // Show nothing while redirecting
+  return null
 }
 
 // Session selector component with template actions
@@ -53,7 +98,7 @@ function SessionSelector() {
         value={sessionId ?? ""}
         onChange={(e) => {
           if (e.target.value) {
-            switchSession(e.target.value as typeof sessionId)
+            switchSession(e.target.value as Id<"sessions">)
           }
         }}
         className="rounded-md border border-input bg-background px-2 py-1 text-sm"
@@ -61,7 +106,7 @@ function SessionSelector() {
         <option value="" disabled>
           Select session...
         </option>
-        {sessions.map((session) => (
+        {sessions.map((session: Doc<"sessions">) => (
           <option key={session._id} value={session._id}>
             {session.name ?? `Session ${session._id.slice(-6)}`}
           </option>
@@ -132,71 +177,152 @@ function SessionSelector() {
   )
 }
 
-function RootLayoutContent() {
+// Authenticated app wrapper - SessionProvider resets when user logs out/in
+function AuthenticatedApp({ children }: { children: React.ReactNode }) {
+  return <SessionProvider>{children}</SessionProvider>
+}
+
+// Header content for authenticated users (needs SessionContext)
+function AuthenticatedHeader() {
   const { isDark, toggle } = useTheme()
 
   return (
+    <div className="flex items-center gap-4">
+      <SessionSelector />
+      <Button variant="outline" size="sm" onClick={toggle}>
+        {isDark ? "Light" : "Dark"}
+      </Button>
+      <UserMenu />
+    </div>
+  )
+}
+
+// Header content for unauthenticated users
+function UnauthenticatedHeader() {
+  const { isDark, toggle } = useTheme()
+
+  return (
+    <div className="flex items-center gap-4">
+      <Button variant="outline" size="sm" onClick={toggle}>
+        {isDark ? "Light" : "Dark"}
+      </Button>
+      <Link to="/login">
+        <Button variant="outline" size="sm">Sign In</Button>
+      </Link>
+    </div>
+  )
+}
+
+function RootLayout() {
+  return (
     <DndProvider>
       <div className="min-h-screen bg-background">
-        <header className="border-b border-border">
-          <div className="mx-auto max-w-6xl px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <Link to="/" className="hover:opacity-80">
-                <h1 className="text-2xl font-bold text-foreground">ContextForge</h1>
-              </Link>
-              <nav className="flex items-center gap-4">
-                <Link
-                  to="/"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  activeProps={{ className: "text-foreground font-medium" }}
-                >
-                  Home
-                </Link>
-                <Link
-                  to="/templates"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  activeProps={{ className: "text-foreground font-medium" }}
-                >
-                  Templates
-                </Link>
-                <Link
-                  to="/projects"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  activeProps={{ className: "text-foreground font-medium" }}
-                >
-                  Projects
-                </Link>
-                <Link
-                  to="/workflows"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  activeProps={{ className: "text-foreground font-medium" }}
-                >
-                  Workflows
-                </Link>
-              </nav>
-            </div>
-            <div className="flex items-center gap-4">
-              <SessionSelector />
-              <Button variant="outline" size="sm" onClick={toggle}>
-                {isDark ? "Light" : "Dark"}
-              </Button>
-            </div>
-          </div>
-        </header>
-        <main className="mx-auto max-w-6xl px-8 py-6">
-          <Outlet />
-        </main>
+        <AuthLoading>
+          <LoadingLayout />
+        </AuthLoading>
+        <Authenticated>
+          <AuthenticatedApp>
+            <AuthenticatedLayout />
+          </AuthenticatedApp>
+        </Authenticated>
+        <Unauthenticated>
+          <UnauthenticatedLayout />
+        </Unauthenticated>
       </div>
       <TanStackRouterDevtools />
     </DndProvider>
   )
 }
 
-function RootLayout() {
+// Loading state layout
+function LoadingLayout() {
   return (
-    <SessionProvider>
-      <RootLayoutContent />
-    </SessionProvider>
+    <>
+      <Header rightContent={<span className="text-muted-foreground text-sm">Loading...</span>} />
+      <main className="mx-auto max-w-6xl px-8 py-6">
+        <div className="flex items-center justify-center py-12">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    </>
+  )
+}
+
+// Authenticated user layout
+function AuthenticatedLayout() {
+  return (
+    <>
+      <Header rightContent={<AuthenticatedHeader />} />
+      <main className="mx-auto max-w-6xl px-8 py-6">
+        <Outlet />
+      </main>
+    </>
+  )
+}
+
+// Unauthenticated user layout
+function UnauthenticatedLayout() {
+  return (
+    <>
+      <Header rightContent={<UnauthenticatedHeader />} />
+      <main className="mx-auto max-w-6xl px-8 py-6">
+        <AuthRedirect />
+        <Outlet />
+      </main>
+    </>
+  )
+}
+
+// Shared header component
+function Header({ rightContent }: { rightContent: React.ReactNode }) {
+  return (
+    <header className="border-b border-border">
+      <div className="mx-auto max-w-6xl px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <Link to="/" className="hover:opacity-80">
+            <h1 className="text-2xl font-bold text-foreground">ContextForge</h1>
+          </Link>
+          <nav className="flex items-center gap-4">
+            <Link
+              to="/"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              activeProps={{ className: "text-foreground font-medium" }}
+            >
+              Home
+            </Link>
+            <Link
+              to="/templates"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              activeProps={{ className: "text-foreground font-medium" }}
+            >
+              Templates
+            </Link>
+            <Link
+              to="/projects"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              activeProps={{ className: "text-foreground font-medium" }}
+            >
+              Projects
+            </Link>
+            <Link
+              to="/workflows"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              activeProps={{ className: "text-foreground font-medium" }}
+            >
+              Workflows
+            </Link>
+            <Link
+              to="/settings"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              activeProps={{ className: "text-foreground font-medium" }}
+            >
+              Settings
+            </Link>
+          </nav>
+        </div>
+        {rightContent}
+      </div>
+    </header>
   )
 }
 

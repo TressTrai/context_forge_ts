@@ -10,7 +10,7 @@ import { countTokens } from "./lib/tokenizer"
 /**
  * Format for context export.
  */
-type ExportFormat = "plain" | "markdown" | "xml"
+export type ExportFormat = "plain" | "markdown" | "xml"
 
 /**
  * Format messages as plain text.

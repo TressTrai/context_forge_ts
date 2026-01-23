@@ -7,7 +7,7 @@ import { useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
-import type { Id } from "../../../convex/_generated/dataModel"
+import type { Id, Doc } from "../../../convex/_generated/dataModel"
 
 interface SaveTemplateDialogProps {
   isOpen: boolean
@@ -71,7 +71,7 @@ export function SaveTemplateDialog({
     } else {
       const templateId = value as Id<"templates">
       setSelectedTemplateId(templateId)
-      const template = templates?.find((t) => t._id === templateId)
+      const template = templates?.find((t: Doc<"templates">) => t._id === templateId)
       if (template) {
         setName(template.name)
         setDescription(template.description ?? "")
@@ -104,7 +104,7 @@ export function SaveTemplateDialog({
               <option value="new">Create new template</option>
               {templates && templates.length > 0 && (
                 <optgroup label="Overwrite existing">
-                  {templates.map((template) => (
+                  {templates.map((template: Doc<"templates">) => (
                     <option key={template._id} value={template._id}>
                       {template.name}
                     </option>

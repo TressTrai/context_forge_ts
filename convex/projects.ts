@@ -7,14 +7,27 @@
 
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import {
+  getOptionalUserId,
+  canAccessProject,
+  requireSessionAccess,
+  canAccessTemplate,
+} from "./lib/auth"
 
 /**
- * List all projects.
+ * List all projects for the current user.
  */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const projects = await ctx.db.query("projects").order("desc").collect()
+    const userId = await getOptionalUserId(ctx)
+
+    const allProjects = await ctx.db.query("projects").order("desc").collect()
+
+    // Filter to user's projects or legacy projects
+    const projects = userId
+      ? allProjects.filter((p) => p.userId === userId || !p.userId)
+      : allProjects.filter((p) => !p.userId)
 
     // Enrich with session counts
     const enriched = await Promise.all(
@@ -40,6 +53,9 @@ export const list = query({
 export const get = query({
   args: { id: v.id("projects") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessProject(ctx, args.id)
+    if (!hasAccess) return null
+
     const project = await ctx.db.get(args.id)
     if (!project) return null
 
@@ -83,8 +99,10 @@ export const create = mutation({
     workflowId: v.optional(v.id("workflows")),
   },
   handler: async (ctx, args) => {
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     return await ctx.db.insert("projects", {
+      userId: userId ?? undefined,
       name: args.name,
       description: args.description,
       workflowId: args.workflowId,
@@ -106,6 +124,11 @@ export const update = mutation({
     currentStep: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessProject(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Project not found or access denied")
+    }
+
     const project = await ctx.db.get(args.id)
     if (!project) {
       throw new Error("Project not found")
@@ -129,6 +152,11 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("projects") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessProject(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Project not found or access denied")
+    }
+
     // Unlink all sessions from this project
     const sessions = await ctx.db
       .query("sessions")
@@ -154,15 +182,30 @@ export const createSession = mutation({
     stepNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessProject(ctx, args.projectId)
+    if (!hasAccess) {
+      throw new Error("Project not found or access denied")
+    }
+
     const project = await ctx.db.get(args.projectId)
     if (!project) {
       throw new Error("Project not found")
     }
 
+    // Check template access if provided
+    if (args.templateId) {
+      const hasTemplateAccess = await canAccessTemplate(ctx, args.templateId)
+      if (!hasTemplateAccess) {
+        throw new Error("Template not found or access denied")
+      }
+    }
+
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
 
     // Create the session
     const sessionId = await ctx.db.insert("sessions", {
+      userId: userId ?? undefined,
       name: args.name ?? `Session ${now}`,
       projectId: args.projectId,
       templateId: args.templateId,
@@ -209,6 +252,14 @@ export const addSession = mutation({
     stepNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Check access to both project and session
+    const hasProjectAccess = await canAccessProject(ctx, args.projectId)
+    if (!hasProjectAccess) {
+      throw new Error("Project not found or access denied")
+    }
+
+    await requireSessionAccess(ctx, args.sessionId)
+
     const project = await ctx.db.get(args.projectId)
     if (!project) {
       throw new Error("Project not found")
@@ -237,6 +288,8 @@ export const removeSession = mutation({
     sessionId: v.id("sessions"),
   },
   handler: async (ctx, args) => {
+    await requireSessionAccess(ctx, args.sessionId)
+
     const session = await ctx.db.get(args.sessionId)
     if (!session) {
       throw new Error("Session not found")

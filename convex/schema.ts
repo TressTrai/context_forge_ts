@@ -1,8 +1,11 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
+import { authTables } from "@convex-dev/auth/server"
 import { zoneValidator } from "./lib/validators"
 
 export default defineSchema({
+  // Auth tables from Convex Auth
+  ...authTables,
   // Demo table - can be removed along with convex/counters.ts
   // @deprecated For demo/testing only
   counters: defineTable({
@@ -12,6 +15,7 @@ export default defineSchema({
 
   // Sessions - isolated workspaces for context management
   sessions: defineTable({
+    userId: v.optional(v.id("users")), // Owner of this session (optional for migration)
     name: v.optional(v.string()), // Optional display name
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -30,10 +34,13 @@ export default defineSchema({
     projectId: v.optional(v.id("projects")),
     templateId: v.optional(v.id("templates")),
     stepNumber: v.optional(v.number()),
-  }).index("by_project", ["projectId"]),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user", ["userId"]),
 
   // Templates - reusable session configurations
   templates: defineTable({
+    userId: v.optional(v.id("users")), // Owner of this template (optional for migration)
     name: v.string(),
     description: v.optional(v.string()),
     // Snapshot of blocks to load when applying template
@@ -50,20 +57,24 @@ export default defineSchema({
     stepOrder: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_workflow", ["workflowId", "stepOrder"]),
+  })
+    .index("by_workflow", ["workflowId", "stepOrder"])
+    .index("by_user", ["userId"]),
 
   // Projects - groups related sessions (Phase 2)
   projects: defineTable({
+    userId: v.optional(v.id("users")), // Owner of this project (optional for migration)
     name: v.string(),
     description: v.optional(v.string()),
     workflowId: v.optional(v.id("workflows")),
     currentStep: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }),
+  }).index("by_user", ["userId"]),
 
   // Workflows - ordered sequence of templates (Phase 3)
   workflows: defineTable({
+    userId: v.optional(v.id("users")), // Owner of this workflow (optional for migration)
     name: v.string(),
     description: v.optional(v.string()),
     steps: v.array(
@@ -79,7 +90,7 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }),
+  }).index("by_user", ["userId"]),
 
   // Core blocks table - content blocks within sessions
   blocks: defineTable({

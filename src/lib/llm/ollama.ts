@@ -1,9 +1,14 @@
 /**
- * Ollama API client for local LLM inference.
- * Ollama runs at localhost:11434 and provides an OpenAI-compatible API.
+ * Client-side Ollama API client.
+ * Calls Ollama directly from the browser.
+ *
+ * IMPORTANT: Ollama must be started with CORS enabled:
+ * OLLAMA_ORIGINS="*" ollama serve
  *
  * API Documentation: https://github.com/ollama/ollama/blob/main/docs/api.md
  */
+
+import { ollama as settings } from "./settings"
 
 export interface OllamaMessage {
   role: "system" | "user" | "assistant"
@@ -18,29 +23,12 @@ export interface OllamaStreamChunk {
     content: string
   }
   done: boolean
-  // Final chunk includes these stats
   total_duration?: number
   load_duration?: number
   prompt_eval_count?: number
   prompt_eval_duration?: number
   eval_count?: number
   eval_duration?: number
-}
-
-export interface OllamaChatResponse {
-  model: string
-  created_at: string
-  message: {
-    role: string
-    content: string
-  }
-  done: boolean
-  total_duration: number
-  load_duration: number
-  prompt_eval_count: number
-  prompt_eval_duration: number
-  eval_count: number
-  eval_duration: number
 }
 
 export interface OllamaModel {
@@ -64,23 +52,6 @@ export interface StreamChatResult {
   totalDuration?: number
 }
 
-// Default configuration
-const DEFAULT_OLLAMA_URL = "http://localhost:11434"
-const DEFAULT_MODEL = "gpt-oss:latest"
-
-function getOllamaUrl(): string {
-  // In Convex, process.env is available in actions
-  return typeof process !== "undefined" && process.env?.OLLAMA_URL
-    ? process.env.OLLAMA_URL
-    : DEFAULT_OLLAMA_URL
-}
-
-function getDefaultModel(): string {
-  return typeof process !== "undefined" && process.env?.OLLAMA_MODEL
-    ? process.env.OLLAMA_MODEL
-    : DEFAULT_MODEL
-}
-
 /**
  * Stream chat completion from Ollama.
  * Returns an async generator of text chunks.
@@ -89,8 +60,8 @@ export async function* streamChat(
   messages: OllamaMessage[],
   options?: StreamChatOptions
 ): AsyncGenerator<string, StreamChatResult, unknown> {
-  const ollamaUrl = getOllamaUrl()
-  const model = options?.model || getDefaultModel()
+  const ollamaUrl = settings.getUrl()
+  const model = options?.model || settings.getModel()
 
   const response = await fetch(`${ollamaUrl}/api/chat`, {
     method: "POST",
@@ -140,7 +111,6 @@ export async function* streamChat(
           yield chunk.message.content
         }
 
-        // Capture final stats from done chunk
         if (chunk.done) {
           finalStats = chunk
         }
@@ -175,63 +145,47 @@ export async function* streamChat(
 }
 
 /**
- * Non-streaming chat completion from Ollama.
- */
-export async function chat(
-  messages: OllamaMessage[],
-  options?: StreamChatOptions
-): Promise<OllamaChatResponse> {
-  const ollamaUrl = getOllamaUrl()
-  const model = options?.model || getDefaultModel()
-
-  const response = await fetch(`${ollamaUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      options: {
-        temperature: options?.temperature ?? 0.7,
-        top_p: options?.topP,
-        num_predict: options?.maxTokens,
-      },
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Ollama error: ${response.status} ${response.statusText} - ${errorText}`)
-  }
-
-  return response.json()
-}
-
-/**
  * Check if Ollama is available and responding.
  */
 export async function checkHealth(): Promise<{
   ok: boolean
   url: string
   error?: string
+  model?: string
 }> {
-  const ollamaUrl = getOllamaUrl()
+  const ollamaUrl = settings.getUrl()
 
   try {
     const response = await fetch(`${ollamaUrl}/api/tags`, {
       method: "GET",
-      signal: AbortSignal.timeout(5000), // 5 second timeout
+      signal: AbortSignal.timeout(5000),
     })
 
+    if (!response.ok) {
+      return {
+        ok: false,
+        url: ollamaUrl,
+        error: `HTTP ${response.status}: ${response.statusText}`,
+      }
+    }
+
     return {
-      ok: response.ok,
+      ok: true,
       url: ollamaUrl,
+      model: settings.getModel(),
     }
   } catch (error) {
+    // Provide helpful error messages for common issues
+    let errorMessage = error instanceof Error ? error.message : "Unknown error"
+
+    if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
+      errorMessage = `Cannot connect to Ollama at ${ollamaUrl}. Make sure Ollama is running with CORS enabled: OLLAMA_ORIGINS="*" ollama serve`
+    }
+
     return {
       ok: false,
       url: ollamaUrl,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     }
   }
 }
@@ -240,7 +194,7 @@ export async function checkHealth(): Promise<{
  * List available models in Ollama.
  */
 export async function listModels(): Promise<OllamaModel[]> {
-  const ollamaUrl = getOllamaUrl()
+  const ollamaUrl = settings.getUrl()
 
   const response = await fetch(`${ollamaUrl}/api/tags`, {
     method: "GET",

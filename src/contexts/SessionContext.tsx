@@ -44,7 +44,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (storedId) {
         // Verify the stored session still exists
-        const exists = sessions?.some((s) => s._id === storedId)
+        const exists = sessions?.some((s: { _id: string }) => s._id === storedId)
         if (exists) {
           setSessionId(storedId as Id<"sessions">)
           setIsLoading(false)
@@ -72,6 +72,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const createSession = useCallback(
     async (name?: string) => {
       const id = await createSessionMutation({ name })
+      // Update localStorage BEFORE state to prevent race condition with initSession effect
+      localStorage.setItem(SESSION_STORAGE_KEY, id)
       setSessionId(id)
       return id
     },

@@ -8,16 +8,18 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
 import type * as blocks from "../blocks.js";
 import type * as claudeNode from "../claudeNode.js";
 import type * as context from "../context.js";
 import type * as counters from "../counters.js";
+import type * as features from "../features.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as lib_context from "../lib/context.js";
+import type * as lib_featureFlags from "../lib/featureFlags.js";
 import type * as lib_langfuse from "../lib/langfuse.js";
-import type * as lib_ollama from "../lib/ollama.js";
-import type * as lib_openrouter from "../lib/openrouter.js";
 import type * as lib_tokenizer from "../lib/tokenizer.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as metrics from "../metrics.js";
@@ -35,16 +37,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   blocks: typeof blocks;
   claudeNode: typeof claudeNode;
   context: typeof context;
   counters: typeof counters;
+  features: typeof features;
   generations: typeof generations;
   http: typeof http;
+  "lib/auth": typeof lib_auth;
   "lib/context": typeof lib_context;
+  "lib/featureFlags": typeof lib_featureFlags;
   "lib/langfuse": typeof lib_langfuse;
-  "lib/ollama": typeof lib_ollama;
-  "lib/openrouter": typeof lib_openrouter;
   "lib/tokenizer": typeof lib_tokenizer;
   "lib/validators": typeof lib_validators;
   metrics: typeof metrics;

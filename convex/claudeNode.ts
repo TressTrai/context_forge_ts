@@ -24,6 +24,7 @@ import {
   NO_TOOLS_SUFFIX,
 } from "./lib/context"
 import { createGeneration, flushLangfuse } from "./lib/langfuse"
+import { isClaudeCodeEnabled } from "./lib/featureFlags"
 
 // Get Claude Code executable path by trying to locate it
 const getClaudeCodePath = (): string | undefined => {
@@ -91,10 +92,20 @@ function formatMessagesAsPrompt(messages: ClaudeMessage[]): string {
 
 /**
  * Check if Claude Code CLI is available.
+ * Returns disabled status if CLAUDE_CODE_ENABLED feature flag is false.
  */
 export const checkHealth = action({
   args: {},
-  handler: async (): Promise<{ ok: boolean; error?: string; version?: string }> => {
+  handler: async (): Promise<{ ok: boolean; error?: string; version?: string; disabled?: boolean }> => {
+    // Check feature flag first
+    if (!isClaudeCodeEnabled()) {
+      return {
+        ok: false,
+        disabled: true,
+        error: "Claude Code is disabled (CLAUDE_CODE_ENABLED=false)",
+      }
+    }
+
     return new Promise((resolve) => {
       const proc = spawn("claude", ["--version"], {
         timeout: 5000,

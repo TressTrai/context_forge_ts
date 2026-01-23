@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
-import type { Id } from "../../../convex/_generated/dataModel"
+import type { Id, Doc } from "../../../convex/_generated/dataModel"
 
 interface ApplyTemplateDialogProps {
   isOpen: boolean
@@ -113,7 +113,7 @@ export function ApplyTemplateDialog({
               </div>
               <div className="mt-2 flex gap-2 flex-wrap">
                 {["PERMANENT", "STABLE", "WORKING"].map((zone) => {
-                  const count = selectedTemplate.blocks.filter((b) => b.zone === zone).length
+                  const count = selectedTemplate.blocks.filter((b: { zone: string }) => b.zone === zone).length
                   if (count === 0) return null
                   return (
                     <span

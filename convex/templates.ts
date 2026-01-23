@@ -8,14 +8,29 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { zoneValidator } from "./lib/validators"
+import {
+  getOptionalUserId,
+  canAccessTemplate,
+  requireSessionAccess,
+} from "./lib/auth"
 
 /**
- * List all templates.
+ * List all templates for the current user.
  */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("templates").order("desc").collect()
+    const userId = await getOptionalUserId(ctx)
+
+    const templates = await ctx.db.query("templates").order("desc").collect()
+
+    // Filter to user's templates or legacy templates (no userId)
+    if (userId) {
+      return templates.filter((t) => t.userId === userId || !t.userId)
+    }
+
+    // Unauthenticated users see only templates without userId
+    return templates.filter((t) => !t.userId)
   },
 })
 
@@ -25,6 +40,11 @@ export const list = query({
 export const get = query({
   args: { id: v.id("templates") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessTemplate(ctx, args.id)
+    if (!hasAccess) {
+      return null
+    }
+
     return await ctx.db.get(args.id)
   },
 })
@@ -46,8 +66,10 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const userId = await getOptionalUserId(ctx)
     const now = Date.now()
     return await ctx.db.insert("templates", {
+      userId: userId ?? undefined,
       name: args.name,
       description: args.description,
       blocks: args.blocks,
@@ -70,17 +92,20 @@ export const createFromSession = mutation({
     overwriteTemplateId: v.optional(v.id("templates")),
   },
   handler: async (ctx, args) => {
+    // Check session access
+    await requireSessionAccess(ctx, args.sessionId)
+
     // Get the session
     const session = await ctx.db.get(args.sessionId)
     if (!session) {
       throw new Error("Session not found")
     }
 
-    // If overwriting, verify the template exists
+    // If overwriting, verify the template exists and user has access
     if (args.overwriteTemplateId) {
-      const existing = await ctx.db.get(args.overwriteTemplateId)
-      if (!existing) {
-        throw new Error("Template to overwrite not found")
+      const hasTemplateAccess = await canAccessTemplate(ctx, args.overwriteTemplateId)
+      if (!hasTemplateAccess) {
+        throw new Error("Template to overwrite not found or access denied")
       }
     }
 
@@ -108,6 +133,7 @@ export const createFromSession = mutation({
     }))
 
     const now = Date.now()
+    const userId = await getOptionalUserId(ctx)
 
     // Overwrite existing template or create new one
     if (args.overwriteTemplateId) {
@@ -121,6 +147,7 @@ export const createFromSession = mutation({
     }
 
     return await ctx.db.insert("templates", {
+      userId: userId ?? undefined,
       name: args.name,
       description: args.description,
       blocks: blockSnapshots,
@@ -141,6 +168,14 @@ export const applyToSession = mutation({
     clearExisting: v.optional(v.boolean()), // Default: true
   },
   handler: async (ctx, args) => {
+    // Check access to both template and session
+    const hasTemplateAccess = await canAccessTemplate(ctx, args.templateId)
+    if (!hasTemplateAccess) {
+      throw new Error("Template not found or access denied")
+    }
+
+    await requireSessionAccess(ctx, args.sessionId)
+
     const template = await ctx.db.get(args.templateId)
     if (!template) {
       throw new Error("Template not found")
@@ -167,7 +202,7 @@ export const applyToSession = mutation({
     }
 
     // Get max position per zone if merging (not clearing)
-    let maxPositions: Record<string, number> = { PERMANENT: -1, STABLE: -1, WORKING: -1 }
+    const maxPositions: Record<string, number> = { PERMANENT: -1, STABLE: -1, WORKING: -1 }
     if (!clearExisting) {
       const existingBlocks = await ctx.db
         .query("blocks")
@@ -218,6 +253,11 @@ export const update = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessTemplate(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Template not found or access denied")
+    }
+
     const template = await ctx.db.get(args.id)
     if (!template) {
       throw new Error("Template not found")
@@ -238,6 +278,11 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("templates") },
   handler: async (ctx, args) => {
+    const hasAccess = await canAccessTemplate(ctx, args.id)
+    if (!hasAccess) {
+      throw new Error("Template not found or access denied")
+    }
+
     await ctx.db.delete(args.id)
   },
 })
@@ -248,9 +293,18 @@ export const remove = mutation({
 export const listByWorkflow = query({
   args: { workflowId: v.id("workflows") },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const userId = await getOptionalUserId(ctx)
+
+    const templates = await ctx.db
       .query("templates")
       .withIndex("by_workflow", (q) => q.eq("workflowId", args.workflowId))
       .collect()
+
+    // Filter to user's templates or legacy templates
+    if (userId) {
+      return templates.filter((t) => t.userId === userId || !t.userId)
+    }
+
+    return templates.filter((t) => !t.userId)
   },
 })
