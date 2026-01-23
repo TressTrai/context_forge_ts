@@ -21,6 +21,7 @@ function useProviderHealth() {
     claude: null,
     openrouter: null,
   })
+  const features = useQuery(api.features.getFlags)
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -30,22 +31,27 @@ function useProviderHealth() {
       // Check OpenRouter (client-side)
       const openrouterHealth = await openrouterClient.checkHealth()
 
-      // Check Claude Code (backend - still needed)
-      let claudeHealth: { ok: boolean; error?: string; version?: string } | null = null
-      try {
-        const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
-        const baseUrl = convexUrl
-          ? convexUrl.replace(":3210", ":3211")
-          : "http://127.0.0.1:3211"
+      // Check Claude Code (backend) - only if enabled
+      let claudeHealth: { ok: boolean; error?: string; version?: string; disabled?: boolean } | null = null
+      if (features?.claudeCodeEnabled) {
+        try {
+          const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
+          const baseUrl = convexUrl
+            ? convexUrl.replace(":3210", ":3211")
+            : "http://127.0.0.1:3211"
 
-        const response = await fetch(`${baseUrl}/api/health/claude`)
-        if (response.ok) {
-          claudeHealth = await response.json()
-        } else {
-          claudeHealth = { ok: false, error: "Claude Code not available" }
+          const response = await fetch(`${baseUrl}/api/health/claude`)
+          if (response.ok) {
+            claudeHealth = await response.json()
+          } else {
+            claudeHealth = { ok: false, error: "Claude Code not available" }
+          }
+        } catch {
+          claudeHealth = { ok: false, error: "Failed to check Claude Code" }
         }
-      } catch {
-        claudeHealth = { ok: false, error: "Failed to check Claude Code" }
+      } else {
+        // Claude Code is disabled via feature flag
+        claudeHealth = { ok: false, disabled: true, error: "Disabled" }
       }
 
       setHealth({
@@ -55,11 +61,14 @@ function useProviderHealth() {
       })
     }
 
-    checkHealth()
-    // Re-check every 30 seconds
-    const interval = setInterval(checkHealth, 30000)
-    return () => clearInterval(interval)
-  }, [])
+    // Only run health check once features are loaded
+    if (features !== undefined) {
+      checkHealth()
+      // Re-check every 30 seconds
+      const interval = setInterval(checkHealth, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [features])
 
   return health
 }
