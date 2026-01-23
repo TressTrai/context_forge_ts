@@ -5,8 +5,8 @@
  * Session ID is persisted to localStorage.
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { useMutation, useQuery } from "convex/react"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
+import { useMutation, useQuery, useConvexAuth } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 
@@ -32,9 +32,22 @@ const SessionContext = createContext<SessionContextValue | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<Id<"sessions"> | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { isAuthenticated } = useConvexAuth()
+  const wasAuthenticated = useRef(isAuthenticated)
 
   const createSessionMutation = useMutation(api.sessions.create)
   const sessions = useQuery(api.sessions.list)
+
+  // Clear session when user logs out
+  useEffect(() => {
+    if (wasAuthenticated.current && !isAuthenticated) {
+      // User just logged out - clear session
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+      setSessionId(null)
+      setIsLoading(true)
+    }
+    wasAuthenticated.current = isAuthenticated
+  }, [isAuthenticated])
 
   // Initialize session on mount
   useEffect(() => {

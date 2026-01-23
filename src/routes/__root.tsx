@@ -177,10 +177,6 @@ function SessionSelector() {
   )
 }
 
-// Authenticated app wrapper - SessionProvider resets when user logs out/in
-function AuthenticatedApp({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>
-}
 
 // Header content for authenticated users (needs SessionContext)
 function AuthenticatedHeader() {
@@ -216,20 +212,20 @@ function UnauthenticatedHeader() {
 function RootLayout() {
   return (
     <DndProvider>
-      <div className="min-h-screen bg-background">
-        <AuthLoading>
-          <LoadingLayout />
-        </AuthLoading>
-        <Authenticated>
-          <AuthenticatedApp>
+      <SessionProvider>
+        <div className="min-h-screen bg-background">
+          <AuthLoading>
+            <LoadingLayout />
+          </AuthLoading>
+          <Authenticated>
             <AuthenticatedLayout />
-          </AuthenticatedApp>
-        </Authenticated>
-        <Unauthenticated>
-          <UnauthenticatedLayout />
-        </Unauthenticated>
-      </div>
-      <TanStackRouterDevtools />
+          </Authenticated>
+          <Unauthenticated>
+            <UnauthenticatedLayout />
+          </Unauthenticated>
+        </div>
+        <TanStackRouterDevtools />
+      </SessionProvider>
     </DndProvider>
   )
 }
