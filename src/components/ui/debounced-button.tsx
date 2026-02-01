@@ -22,13 +22,32 @@ export function DebouncedButton({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (isDebouncing || disabled) {
+      const buttonType = (e.currentTarget as HTMLButtonElement).type
+      console.log('[DebouncedButton] Click:', {
+        type: buttonType,
+        isDebouncing,
+        disabled,
+        hasOnClick: !!onClick,
+        target: e.currentTarget
+      })
+
+      // Prevent action if already debouncing
+      if (isDebouncing) {
+        console.log('[DebouncedButton] Prevented - already debouncing')
         e.preventDefault()
+        e.stopPropagation()
         return
       }
 
       // Call the original onClick handler if provided
-      onClick?.(e)
+      // For type="submit" buttons without onClick, this does nothing
+      // and allows the default form submission to proceed
+      if (onClick) {
+        console.log('[DebouncedButton] Calling onClick handler')
+        onClick(e)
+      } else {
+        console.log('[DebouncedButton] No onClick handler, allowing default behavior')
+      }
 
       // Start debounce period
       setIsDebouncing(true)
@@ -40,6 +59,7 @@ export function DebouncedButton({
 
       // Set new timeout
       timeoutRef.current = setTimeout(() => {
+        console.log('[DebouncedButton] Debounce period ended')
         setIsDebouncing(false)
       }, debounceMs)
     },

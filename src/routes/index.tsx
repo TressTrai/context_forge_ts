@@ -75,9 +75,23 @@ function AddBlockForm({ sessionId }: { sessionId: Id<"sessions"> }) {
   }, [metrics, zone, estimatedTokens, content])
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('[AddBlockForm] handleSubmit called', {
+      content: content.trim(),
+      budgetWouldExceed: budgetStatus?.wouldExceed,
+      type,
+      zone
+    })
     e.preventDefault()
-    if (!content.trim() || budgetStatus?.wouldExceed) return
+    if (!content.trim() || budgetStatus?.wouldExceed) {
+      console.log('[AddBlockForm] Submission blocked:', {
+        emptyContent: !content.trim(),
+        budgetExceeded: budgetStatus?.wouldExceed
+      })
+      return
+    }
+    console.log('[AddBlockForm] Creating block...')
     await createBlock({ sessionId, content: content.trim(), type, zone })
+    console.log('[AddBlockForm] Block created successfully')
     setContent("")
     setIsExpanded(false)
   }
