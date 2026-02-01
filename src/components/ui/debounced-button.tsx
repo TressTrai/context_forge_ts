@@ -22,9 +22,12 @@ export function DebouncedButton({
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (isDebouncing || disabled) return
+      if (isDebouncing || disabled) {
+        e.preventDefault()
+        return
+      }
 
-      // Call the original onClick handler
+      // Call the original onClick handler if provided
       onClick?.(e)
 
       // Start debounce period
