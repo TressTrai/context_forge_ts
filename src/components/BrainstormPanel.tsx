@@ -165,7 +165,9 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
 
   // Compact mode - just a button
   if (compact) {
-    const anyProviderAvailable = health.claude?.ok || health.ollama?.ok || health.openrouter?.ok
+    // Optimistic: if all health is still null (pending), allow opening
+    const allPending = health.claude === null && health.ollama === null && health.openrouter === null
+    const anyProviderAvailable = allPending || health.claude?.ok || health.ollama?.ok || health.openrouter?.ok
     return (
       <>
         <Button
@@ -227,7 +229,11 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
           </Button>
           <Button
             onClick={() => brainstorm.open()}
-            disabled={!health.claude?.ok && !health.ollama?.ok && !health.openrouter?.ok}
+            disabled={
+              // Optimistic: allow opening while health checks are pending
+              !(health.claude === null && health.ollama === null && health.openrouter === null) &&
+              !health.claude?.ok && !health.ollama?.ok && !health.openrouter?.ok
+            }
           >
             {brainstorm.messages.length > 0
               ? `Continue (${brainstorm.messages.length} msgs)`

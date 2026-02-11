@@ -296,11 +296,12 @@ snapshots: defineTable({
 **Goal:** Refinements based on usage.
 
 - [ ] Theme system (proper provider)
-- [ ] Markdown preview in editor
+- [x] Markdown preview in editor (PR #1: view/edit toggle with react-markdown)
+- [x] Markdown rendering in BrainstormDialog (PR #1: replaced regex parser)
 - [ ] Search/filter blocks
 - [ ] Block type icons
 - [ ] Import/export
-- [ ] Compression (if needed)
+- [x] Compression system (TASK-010: multi-provider compression)
 
 ---
 
@@ -318,7 +319,7 @@ snapshots: defineTable({
 | 5.5. Brainstorming | ✅ Done | Multi-turn, OpenRouter, LangFuse |
 | 5.6. Workflows | ✅ Done | Templates, projects, workflows |
 | 5.7. Token Budgets | ✅ Done | js-tiktoken, zone budgets, UI |
-| 6. Polish | 🔜 Next | Theme system, search, import/export |
+| 6. Polish | 🔨 In Progress | Markdown ✅, Compression ✅. Remaining: theme, search, import/export |
 
 ---
 
@@ -351,7 +352,7 @@ Slice 3: DnD    Slice 4: Editor
    Slice 5.7: Token Budgets ✅
                 │
                 ▼
-       Slice 6: Polish 🔜
+       Slice 6: Polish 🔨
 ```
 
 ---

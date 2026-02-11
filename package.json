@@ -17,11 +17,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/contextforge.git"
+    "url": "git+https://github.com/opcheese/context_forge_ts.git"
   },
-  "homepage": "https://github.com/OWNER/contextforge#readme",
+  "homepage": "https://github.com/opcheese/context_forge_ts#readme",
   "bugs": {
-    "url": "https://github.com/OWNER/contextforge/issues"
+    "url": "https://github.com/opcheese/context_forge_ts/issues"
   },
   "scripts": {
     "dev": "vite",

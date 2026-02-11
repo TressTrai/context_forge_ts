@@ -1,5 +1,24 @@
 # TASK-004: Block Editor Improvements (Space Usage & Markdown Support)
 
+## Status: Partially Implemented (PR #1)
+
+**Implemented (PR #1 from TressTrai/md-formating, merged 2026-02-11):**
+- [x] Markdown rendering in block view mode (`react-markdown` + `remark-gfm` + `remark-breaks`)
+- [x] Shared `MarkdownComponents.tsx` for consistent styling across app
+- [x] View/edit toggle (blocks show rendered markdown by default)
+- [x] Larger editor textarea (`h-[60vh]` instead of fixed 12 rows)
+- [x] BrainstormDialog uses proper markdown rendering (replaced regex-based `renderMarkdown`)
+- [x] Actions bar moved above content area
+
+**Remaining (not yet implemented):**
+- [ ] Split-pane editor (side-by-side edit + preview) — current approach uses view/edit toggle instead
+- [ ] Syntax-highlighted code editor (`@uiw/react-textarea-code-editor` or similar)
+- [ ] Keyboard shortcuts (Ctrl+S to save, Esc to cancel)
+- [ ] Full-height layout (currently content area, not full viewport)
+- [ ] File drag-drop into editor
+
+**Library choice diverged from plan:** Used `react-markdown` + `remark-gfm` instead of `streamdown`. This is a reasonable choice since `react-markdown` is more mature and widely used.
+
 ## Overview
 
 Improve the block/note editing experience by maximizing space usage and adding markdown support with live preview, matching the Python ContextForge implementation.
@@ -17,7 +36,7 @@ Additionally, markdown support is needed for better content formatting.
 
 ### Core Behavior
 - Block editor should use full available space (not a small modal)
-- Split-pane layout: editor on left, live preview on right
+- ~~Split-pane layout: editor on left, live preview on right~~ → View/edit toggle implemented instead
 - Markdown syntax highlighting in editor
 - Real-time markdown preview
 - Keyboard shortcuts for common actions
@@ -288,38 +307,43 @@ const handleDrop = (e: DragEvent) => {
 
 ## File Checklist
 
-### New Files
-- [ ] `src/components/editor/MarkdownPreview.tsx`
-- [ ] `src/components/editor/CodeEditor.tsx` (or MarkdownEditor)
-- [ ] `src/components/editor/SplitPaneEditor.tsx`
-- [ ] `src/components/editor/index.ts`
+### New Files (Created in PR #1)
+- [x] `src/components/MarkdownComponents.tsx` — shared markdown element styles
+- [ ] `src/components/editor/MarkdownPreview.tsx` — not needed if staying with view/edit toggle
+- [ ] `src/components/editor/CodeEditor.tsx` — for split-pane approach (deferred)
+- [ ] `src/components/editor/SplitPaneEditor.tsx` — for split-pane approach (deferred)
 
-### Files to Modify
-- [ ] `package.json` - Add streamdown and code editor dependencies
-- [ ] Block editor page/route - Use full-height layout with SplitPaneEditor
-- [ ] Tailwind config - Ensure prose plugin is configured
-- [ ] BrainstormDialog - Use MarkdownPreview for AI responses (parseIncompleteMarkdown=true)
+### Files Modified (in PR #1)
+- [x] `package.json` - Added `react-markdown`, `remark-gfm`, `remark-breaks`
+- [x] `src/routes/blocks/$blockId.tsx` - View/edit toggle, larger textarea, markdown rendering
+- [x] `src/components/BrainstormDialog.tsx` - Replaced regex markdown with react-markdown
+
+### Files Still To Modify
+- [ ] Block editor page/route - Full-height layout (if pursuing)
+- [ ] Keyboard shortcuts integration
 
 ---
 
 ## Testing Checklist
 
 - [ ] Editor uses full viewport height
-- [ ] Split pane shows editor on left, preview on right
-- [ ] Markdown syntax is highlighted in editor
-- [ ] Preview updates in real-time as user types
-- [ ] Cmd/Ctrl+S saves changes
-- [ ] Esc cancels (when no unsaved changes)
-- [ ] Unsaved changes indicator shows when content modified
-- [ ] All markdown elements render correctly:
-  - [ ] Headings (H1-H3)
-  - [ ] Bold, italic
-  - [ ] Lists (ordered, unordered)
-  - [ ] Code blocks and inline code
-  - [ ] Links
-  - [ ] Tables (if supported by Streamdown)
-- [ ] Editor is scrollable for long content
-- [ ] Preview is scrollable independently
+- ~~Split pane shows editor on left, preview on right~~ → View/edit toggle used instead
+- [ ] Markdown syntax is highlighted in editor (not yet — plain textarea)
+- [x] Markdown renders correctly in view mode
+- [ ] Cmd/Ctrl+S saves changes (not yet)
+- [ ] Esc cancels (not yet)
+- [x] Unsaved changes indicator shows when content modified
+- [x] All markdown elements render correctly (via MarkdownComponents):
+  - [x] Headings (H1-H6)
+  - [x] Bold, italic (via react-markdown)
+  - [x] Lists (ordered, unordered)
+  - [x] Code blocks and inline code
+  - [x] Links
+  - [x] Tables (via remark-gfm)
+  - [x] Blockquotes
+  - [x] Horizontal rules
+- [x] Editor textarea is scrollable for long content
+- [x] View/edit toggle works correctly
 
 ---
 

@@ -367,6 +367,21 @@ export function BrainstormDialog({
     }
   }
 
+  // Auto-switch away from disabled/unavailable provider
+  useEffect(() => {
+    if (!providerHealth) return
+    const current = providerHealth[provider]
+    // If current provider's health is known and it's not ok (or disabled), switch to first available
+    if (current !== null && current !== undefined && (!current.ok || ('disabled' in current && current.disabled))) {
+      if (providerHealth.ollama?.ok) {
+        onProviderChange("ollama")
+      } else if (providerHealth.openrouter?.ok) {
+        onProviderChange("openrouter")
+      }
+      // If nothing available, stay put — user will see offline indicators
+    }
+  }, [providerHealth, provider, onProviderChange])
+
   // Check if provider is available
   // Be optimistic while health checks are pending - allow input immediately
   const isProviderAvailable =

@@ -23,7 +23,7 @@ Prioritized implementation order for ContextForgeTS tasks and bugs based on:
 | TASK-001 | Feature | Public templates & workflows | Low | High | Documented |
 | TASK-002 | Feature | Delete confirmation dialogs | **Critical** | Low | ✅ **Completed** |
 | TASK-003 | Feature | Session deletion | Medium | Low | Documented |
-| TASK-004 | Feature | Block editor improvements | High | Medium | Documented |
+| TASK-004 | Feature | Block editor improvements | High | Medium | ⚡ **Partial** (PR #1) |
 | TASK-005 | Feature | Block title extraction | Medium | Low | Documented |
 | TASK-006 | Feature | Zone move from editor | Medium | Low | Documented |
 | TASK-007 | Feature | Keyboard shortcuts system | Low | High | Documented |
@@ -89,7 +89,7 @@ Fix the most frustrating UX issues reported by users.
 | Order | Task | Rationale | Effort |
 |-------|------|-----------|--------|
 | **2.1** | BUG-001: Drag-drop reordering | Core feature "doesn't work at all" | Medium |
-| **2.2** | TASK-004: Block editor improvements | Multiple complaints about editor size/usability | Medium |
+| **2.2** | TASK-004: Block editor improvements | ⚡ Partially done (PR #1: markdown view, edit toggle, larger textarea). Remaining: split-pane, keyboard shortcuts, full-height | Medium |
 | **2.3** | BUG-004: Save dropdown positioning | Easy fix, improves save UX | Low |
 | **2.4** | TASK-008: Brainstorm input sizing | Quick win, part of TASK-004 scope | Low |
 
@@ -230,4 +230,5 @@ Update this section as work progresses:
 | Item 28 | 2026-02-01 | ✅ | Button debouncing (300-500ms) on all critical actions |
 | TASK-009 | 2026-02-01 | ✅ | Unsaved brainstorm warnings (close/navigate/refresh) |
 | TASK-010 | 2026-01-30 | ✅ | Compression system with multi-provider support |
+| TASK-004 | 2026-02-11 | ⚡ Partial | PR #1: markdown rendering, view/edit toggle, larger textarea. Remaining: split-pane, keyboard shortcuts |
 | | | | |

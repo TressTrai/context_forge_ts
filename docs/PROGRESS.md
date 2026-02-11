@@ -662,3 +662,71 @@ See [IMPLEMENTATION-ORDER.md](./IMPLEMENTATION-ORDER.md) for Sprint 2 priorities
 2. TASK-004: Block editor improvements
 3. BUG-004: Save dropdown positioning
 4. TASK-008: Brainstorm input sizing
+
+---
+
+## Session 10: Repository Migration & PR #1 Merge
+
+### Repository Changes
+
+**Primary remote switched to public repo:**
+- `origin` → `opcheese/context_forge_ts.git` (public, Vercel-deployed)
+- `ludentes` → `Ludentes/ContextForgeTS.git` (secondary/private)
+- `main` branch now tracks `origin/main`
+- `package.json` repository URLs updated to public repo
+
+### Merged PR #1: Markdown Formatting (TressTrai/md-formating)
+
+External contribution that implements markdown rendering across the app.
+
+**New dependencies:**
+- `react-markdown` ^10.1.0
+- `remark-gfm` ^4.0.1
+- `remark-breaks` ^4.0.0
+
+**New file:**
+- `src/components/MarkdownComponents.tsx` — shared styled markdown components (h1-h6, p, code, pre, table, lists, blockquote, hr, links)
+
+**Changes to `src/components/BrainstormDialog.tsx`:**
+- Removed custom `renderMarkdown()` regex parser (was fragile, incomplete)
+- Replaced `dangerouslySetInnerHTML` with `<ReactMarkdown>` component
+- Uses shared `MarkdownComponents` for consistent styling
+- Applied to both `MessageBubble` and `StreamingMessage`
+
+**Changes to `src/routes/blocks/$blockId.tsx`:**
+- Added `isEditing` state — view/edit toggle pattern
+- View mode: renders block content as markdown via `<ReactMarkdown>`
+- Edit mode: textarea with `h-[60vh]` (vs old fixed 12 rows)
+- Actions bar moved above content (better visibility)
+- Cancel button behavior: exits edit mode first, then navigates back
+
+### Impact on Plans
+
+**TASK-004 (Block editor improvements):** Partially addressed
+- ✅ Markdown rendering in view mode
+- ✅ Larger editor textarea
+- ✅ View/edit toggle
+- ❌ Split-pane editor (plan called for side-by-side, got toggle instead)
+- ❌ Syntax-highlighted code editor
+- ❌ Keyboard shortcuts (Ctrl+S)
+
+**Roadmap Slice 6 (Polish):**
+- ✅ Markdown preview in editor
+- ✅ Markdown in BrainstormDialog
+
+**Library choice diverged from TASK-004 plan:**
+- Plan specified `streamdown` + `@uiw/react-textarea-code-editor`
+- PR used `react-markdown` + `remark-gfm` — more mature, widely adopted
+- This is a reasonable divergence; `react-markdown` ecosystem is better maintained
+
+### Current State
+
+```bash
+pnpm lint           # needs verification
+pnpm build          # needs verification
+```
+
+### Next Steps
+
+1. Verify build works with new dependencies
+2. Continue Sprint 2: BUG-001 (drag-drop), remaining TASK-004 items, BUG-004, TASK-008
