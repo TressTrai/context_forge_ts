@@ -291,6 +291,31 @@ snapshots: defineTable({
 
 ---
 
+## Slice 5.8: SKILL.md Import System
+
+**Goal:** Import Agent Skills (SKILL.md) as first-class blocks for compatibility with the skills ecosystem.
+
+**Status:** Designed
+
+**Design:** See [plans/2026-02-11-skill-import-design.md](./plans/2026-02-11-skill-import-design.md)
+
+### Features
+- [ ] New `skill` block type with metadata (name, description, source, provenance)
+- [ ] SKILL.md parser — pure function, zero deps, shared across client/server
+- [ ] Local folder scan — read `~/.claude/skills/` (local deployment only, feature-flagged)
+- [ ] File upload — drag-and-drop .md/.zip in the UI
+- [ ] URL import — paste GitHub URLs to fetch SKILL.md
+- [ ] Skill block rendering — distinct icon, skill name as title, description subtitle
+- [ ] Template-based persistence — skills bundled into templates for reuse
+
+### Files (Planned)
+- `src/lib/skills/parser.ts` - SKILL.md parser
+- `convex/skills.ts` - Import mutation + folder scan Node action
+- `src/components/ImportSkillModal.tsx` - Import UI
+- `src/lib/blockTypes.ts` - Updated with `skill` type
+
+---
+
 ## Slice 6: Polish & Advanced
 
 **Goal:** Refinements based on usage.
@@ -300,7 +325,7 @@ snapshots: defineTable({
 - [x] Markdown rendering in BrainstormDialog (PR #1: replaced regex parser)
 - [ ] Search/filter blocks
 - [ ] Block type icons
-- [ ] Import/export
+- [x] Import/export (SKILL.md import via Slice 5.8; general export TBD)
 - [x] Compression system (TASK-010: multi-provider compression)
 
 ---
@@ -319,7 +344,8 @@ snapshots: defineTable({
 | 5.5. Brainstorming | ✅ Done | Multi-turn, OpenRouter, LangFuse |
 | 5.6. Workflows | ✅ Done | Templates, projects, workflows |
 | 5.7. Token Budgets | ✅ Done | js-tiktoken, zone budgets, UI |
-| 6. Polish | 🔨 In Progress | Markdown ✅, Compression ✅. Remaining: theme, search, import/export |
+| 5.8. Skill Import | 📋 Designed | SKILL.md as blocks, three intake mechanisms, template persistence |
+| 6. Polish | 🔨 In Progress | Markdown ✅, Compression ✅. Remaining: theme, search, block type icons |
 
 ---
 
@@ -351,8 +377,10 @@ Slice 3: DnD    Slice 4: Editor
                 ▼
    Slice 5.7: Token Budgets ✅
                 │
-                ▼
-       Slice 6: Polish 🔨
+        ┌───────┴───────┐
+        ▼               ▼
+ Slice 5.8:       Slice 6:
+ Skill Import 📋  Polish 🔨
 ```
 
 ---

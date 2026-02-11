@@ -31,6 +31,7 @@ Prioritized implementation order for ContextForgeTS tasks and bugs based on:
 | TASK-009 | Feature | Unsaved brainstorm warning | High | Medium | ✅ **Completed** |
 | TASK-010 | Feature | Compression system | Medium | High | ✅ **Completed** |
 | TASK-011 | Design | Interface design enhancement | Low | High | Documented |
+| TASK-012 | Feature | SKILL.md import system | **High** | Medium | Designed |
 
 ### Design Documents (Not Implementation Tasks)
 
@@ -39,6 +40,7 @@ Prioritized implementation order for ContextForgeTS tasks and bugs based on:
 | DESIGN-brainstorm-questioning | Brainstorm questioning modes | Future feature design |
 | DESIGN-compression-system | Compression architecture | Reference for TASK-010 |
 | DESIGN-block-type-usage | Block type documentation | User guidance |
+| DESIGN-skill-import | SKILL.md import system | Design for TASK-012 |
 
 ### Pending Bug Report Items (23-29)
 
@@ -97,45 +99,60 @@ Fix the most frustrating UX issues reported by users.
 
 ---
 
-### Sprint 3: Feature Completeness
+### Sprint 3: SKILL.md Import System
+
+SKILL.md compatibility for the growing Agent Skills ecosystem. No dependencies on Sprint 2 bugs — can start immediately after Sprint 2. Design: [2026-02-11-skill-import-design.md](./plans/2026-02-11-skill-import-design.md)
+
+| Order | Task | Rationale | Effort |
+|-------|------|-----------|--------|
+| **3.1** | TASK-012a: Schema + parser | Add `skill` block type, metadata field, SKILL.md parser (zero deps) | Low |
+| **3.2** | TASK-012b: Convex mutation + Node action | `skills.importSkill` mutation, local folder scan action (feature-flagged) | Low |
+| **3.3** | TASK-012c: Client-side handlers | File upload (.md/.zip) and URL import with client-side parsing | Medium |
+| **3.4** | TASK-012d: UI — import modal + skill block card | "Import Skill" in Add Block menu, skill block rendering with name/icon/provenance | Medium |
+
+**Sprint 3 Total Effort**: Medium (~3-5 days)
+
+---
+
+### Sprint 4: Feature Completeness
 
 Fill gaps in existing features.
 
 | Order | Task | Rationale | Effort |
 |-------|------|-----------|--------|
-| **3.1** | Item 29: Generator missing OpenRouter | Feature parity between Generate and Brainstorm | Low |
-| **3.2** | TASK-005: Block title extraction | Improves block identification | Low |
-| **3.3** | TASK-006: Zone move from editor | Workflow improvement | Low |
-| **3.4** | TASK-003: Session deletion | Users need to manage sessions | Low |
-| **3.5** | BUG-003: Test connection before save | Better settings UX | Low |
+| **4.1** | Item 29: Generator missing OpenRouter | Feature parity between Generate and Brainstorm | Low |
+| **4.2** | TASK-005: Block title extraction | Improves block identification | Low |
+| **4.3** | TASK-006: Zone move from editor | Workflow improvement | Low |
+| **4.4** | TASK-003: Session deletion | Users need to manage sessions | Low |
+| **4.5** | BUG-003: Test connection before save | Better settings UX | Low |
 
-**Sprint 3 Total Effort**: Low-Medium (~2-3 days)
+**Sprint 4 Total Effort**: Low-Medium (~2-3 days)
 
 ---
 
-### Sprint 4: Major Features
+### Sprint 5: Major Features
 
 Significant new functionality.
 
 | Order | Task | Rationale | Effort |
 |-------|------|-----------|--------|
-| **4.1** | TASK-010: Compression system | Token management for large sessions | High |
-| **4.2** | Item 26: Quote/highlight feedback | Improves brainstorm iteration | Medium |
+| **5.1** | TASK-010: Compression system | Token management for large sessions | High |
+| **5.2** | Item 26: Quote/highlight feedback | Improves brainstorm iteration | Medium |
 
-**Sprint 4 Total Effort**: High (~5-7 days)
+**Sprint 5 Total Effort**: High (~5-7 days)
 
 ---
 
-### Sprint 5: Polish & Design
+### Sprint 6: Polish & Design
 
 Visual and interaction improvements.
 
 | Order | Task | Rationale | Effort |
 |-------|------|-----------|--------|
-| **5.1** | TASK-011: Interface design enhancement | Phases 1-4 (tokens, surfaces, typography, spacing) | Medium |
-| **5.2** | TASK-007: Keyboard shortcuts system | Power user productivity | High |
+| **6.1** | TASK-011: Interface design enhancement | Phases 1-4 (tokens, surfaces, typography, spacing) | Medium |
+| **6.2** | TASK-007: Keyboard shortcuts system | Power user productivity | High |
 
-**Sprint 5 Total Effort**: High (~5-7 days)
+**Sprint 6 Total Effort**: High (~5-7 days)
 
 ---
 
@@ -169,6 +186,11 @@ BUG-002 (Input blocked) — standalone, no deps
 TASK-010 (Compression)
     ↓
 TASK-011 (Design) Phase 5 — block card badges for compression
+
+TASK-012 (Skill import) — standalone, no deps on open bugs
+    ↓
+TASK-012a (Schema + parser) → TASK-012b (Convex) → TASK-012c (Client) → TASK-012d (UI)
+    Internal ordering: sequential (schema first, UI last)
 ```
 
 ---
@@ -193,25 +215,30 @@ Tasks requiring careful implementation:
 | BUG-001: Drag-drop | Complex interaction, may have edge cases | Thorough testing |
 | TASK-010: Compression | LLM integration, data transformation | Phase incrementally |
 | TASK-011: Design | Many file changes, visual regression | Per-phase review |
+| TASK-012: Skill import | Schema change, Convex runtime constraints | Parser is zero-dep pure function; keep mutations dependency-free |
 
 ---
 
 ## Summary
 
-### Immediate Priorities (This Week)
-1. TASK-002: Delete confirmation dialogs
-2. BUG-002: Brainstorm input blocked
-3. Item 28: Add button disabled
-4. TASK-009: Unsaved brainstorm warning
+### Current Priorities
+1. ~~TASK-002: Delete confirmation dialogs~~ ✅
+2. ~~BUG-002: Brainstorm input blocked~~ ✅
+3. ~~Item 28: Add button disabled~~ ✅
+4. ~~TASK-009: Unsaved brainstorm warning~~ ✅
 
-### Next Priorities (Next Week)
+### Next Up: Sprint 2 (Core Usability)
 5. BUG-001: Drag-drop reordering
-6. TASK-004: Block editor improvements
-7. Item 29: Generator OpenRouter
+6. TASK-004: Block editor improvements (remaining)
+7. BUG-004: Save dropdown positioning
+8. TASK-008: Brainstorm input sizing
+
+### Then: Sprint 3 (SKILL.md Import)
+9. TASK-012: SKILL.md import system (schema → parser → handlers → UI)
 
 ### Total Documented Work
 - **4 Bugs** documented (BUG-001 to BUG-004)
-- **11 Tasks** documented (TASK-001 to TASK-011)
+- **12 Tasks** documented (TASK-001 to TASK-012)
 - **2 Pending bugs** from report (Items 28, 29)
 - **5 Pending features** from report (Items 23-27)
 
