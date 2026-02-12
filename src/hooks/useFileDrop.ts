@@ -41,15 +41,14 @@ export function useFileDrop({ sessionId, zone, onSkillFile, onSuccess, onError }
   const createBlock = useMutation(api.blocks.create)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return
     e.preventDefault()
     e.stopPropagation()
-
-    if (e.dataTransfer.types.includes("Files")) {
-      setIsDragOver(true)
-    }
+    setIsDragOver(true)
   }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
@@ -57,6 +56,7 @@ export function useFileDrop({ sessionId, zone, onSkillFile, onSuccess, onError }
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes("Files")) return
       e.preventDefault()
       e.stopPropagation()
       setIsDragOver(false)

@@ -2,7 +2,7 @@
  * DnD component exports
  */
 
-export { DndProvider } from "./DndProvider"
+export { DndProvider, useDndOptimistic } from "./DndProvider"
 export { SortableBlock } from "./SortableBlock"
 export { DroppableZone } from "./DroppableZone"
 export { BlockDragOverlay } from "./BlockDragOverlay"

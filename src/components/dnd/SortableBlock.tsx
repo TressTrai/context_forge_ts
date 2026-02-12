@@ -1,9 +1,12 @@
 /**
  * Wrapper component that makes a block draggable and sortable.
+ * Drag is initiated via a dedicated grip handle to avoid conflicts
+ * with interactive elements (buttons, links, checkboxes) inside the block.
  */
 
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { GripVertical } from "lucide-react"
 import type { Id } from "../../../convex/_generated/dataModel"
 import type { BlockDragData, Zone } from "./types"
 
@@ -36,20 +39,30 @@ export function SortableBlock({ id, zone, position, children }: SortableBlockPro
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    cursor: isDragging ? "grabbing" : "grab",
   }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       data-block-id={id}
       data-zone={zone}
       data-dragging={isDragging}
     >
-      {children}
+      <div className="flex">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="flex items-center px-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="w-3 h-3" />
+        </button>
+        <div className="flex-1 min-w-0">
+          {children}
+        </div>
+      </div>
     </div>
   )
 }

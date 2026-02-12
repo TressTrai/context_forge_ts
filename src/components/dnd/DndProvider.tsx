@@ -1,11 +1,12 @@
 /**
  * DnD Provider component that wraps the app and handles drag events.
+ * Provides optimistic zone ordering to prevent flash-of-old-order on drop.
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect, createContext, useContext } from "react"
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -13,13 +14,19 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core"
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { BlockDragOverlay } from "./BlockDragOverlay"
 import { getPositionBetween, getPositionAtEnd } from "../../lib/positioning"
 import type { BlockDragData, Zone, ZoneDropData } from "./types"
 import { useSession } from "../../contexts/SessionContext"
+import type { Id } from "../../../convex/_generated/dataModel"
+
+// Optimistic zone ordering — maps zone name to expected block ID order
+type OptimisticZoneOrder = Partial<Record<Zone, Id<"blocks">[]>>
+const DndOptimisticContext = createContext<OptimisticZoneOrder>({})
+export function useDndOptimistic() { return useContext(DndOptimisticContext) }
 
 interface DndProviderProps {
   children: React.ReactNode
@@ -27,6 +34,7 @@ interface DndProviderProps {
 
 export function DndProvider({ children }: DndProviderProps) {
   const [activeBlock, setActiveBlock] = useState<{ content: string; type: string } | null>(null)
+  const [optimisticOrder, setOptimisticOrder] = useState<OptimisticZoneOrder>({})
 
   // Get session from context
   const { sessionId } = useSession()
@@ -41,6 +49,15 @@ export function DndProvider({ children }: DndProviderProps) {
     sessionId ? { sessionId } : "skip"
   )
 
+  // Ref-stabilize allBlocks so callbacks don't recreate on every Convex update
+  const allBlocksRef = useRef(allBlocks)
+  allBlocksRef.current = allBlocks
+
+  // Clear optimistic state when server data catches up
+  useEffect(() => {
+    setOptimisticOrder({})
+  }, [allBlocks])
+
   // Configure sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -53,24 +70,27 @@ export function DndProvider({ children }: DndProviderProps) {
     })
   )
 
-  // Handle drag start
+  // Handle drag start — uses ref to avoid recreating on Convex updates
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as BlockDragData | undefined
     if (data?.type === "block") {
-      // Find the block content for the overlay
-      const block = allBlocks?.find((b) => b._id === data.blockId)
+      const block = allBlocksRef.current?.find((b) => b._id === data.blockId)
       if (block) {
         setActiveBlock({ content: block.content, type: block.type })
       }
     }
-  }, [allBlocks])
+  }, [])
 
-  // Handle drag end
+  // Handle drag end — uses ref to avoid recreating on Convex updates
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveBlock(null)
 
-    if (!over || !allBlocks) return
+    // Blur the drag handle so Enter doesn't re-trigger a keyboard drag
+    ;(document.activeElement as HTMLElement)?.blur()
+
+    const blocks = allBlocksRef.current
+    if (!over || !blocks) return
 
     const activeData = active.data.current as BlockDragData | undefined
     if (activeData?.type !== "block") return
@@ -87,12 +107,12 @@ export function DndProvider({ children }: DndProviderProps) {
     if (overData?.type === "zone") {
       // Dropped on empty zone area
       targetZone = overData.zone
-      const zoneBlocks = allBlocks.filter((b) => b.zone === targetZone)
+      const zoneBlocks = blocks.filter((b) => b.zone === targetZone)
       newPosition = getPositionAtEnd(zoneBlocks)
     } else if (overData?.type === "block") {
       // Dropped on another block
       targetZone = overData.zone
-      const zoneBlocks = allBlocks.filter((b) => b.zone === targetZone)
+      const zoneBlocks = blocks.filter((b) => b.zone === targetZone)
       const sortedBlocks = [...zoneBlocks].sort((a, b) => a.position - b.position)
 
       const overIndex = sortedBlocks.findIndex((b) => b._id === over.id)
@@ -114,6 +134,39 @@ export function DndProvider({ children }: DndProviderProps) {
       return
     }
 
+    // Compute optimistic order for immediate visual feedback before mutation round-trip
+    if (sourceZone === targetZone) {
+      // Same-zone reorder: use arrayMove
+      const zoneBlocks = blocks.filter((b) => b.zone === sourceZone).sort((a, b) => a.position - b.position)
+      const ids = zoneBlocks.map((b) => b._id)
+      const oldIndex = ids.indexOf(blockId)
+      const newIndex = ids.indexOf(over.id as Id<"blocks">)
+      if (oldIndex !== -1 && newIndex !== -1) {
+        setOptimisticOrder({ [sourceZone]: arrayMove(ids, oldIndex, newIndex) })
+      }
+    } else {
+      // Cross-zone: remove from source, add to target end
+      const sourceIds = blocks
+        .filter((b) => b.zone === sourceZone)
+        .sort((a, b) => a.position - b.position)
+        .map((b) => b._id)
+        .filter((id) => id !== blockId)
+      const targetBlocks = blocks.filter((b) => b.zone === targetZone).sort((a, b) => a.position - b.position)
+      const targetIds = targetBlocks.map((b) => b._id)
+      // Insert at the drop position
+      if (overData?.type === "block") {
+        const overIdx = targetIds.indexOf(over.id as Id<"blocks">)
+        if (overIdx !== -1) {
+          targetIds.splice(overIdx, 0, blockId)
+        } else {
+          targetIds.push(blockId)
+        }
+      } else {
+        targetIds.push(blockId)
+      }
+      setOptimisticOrder({ [sourceZone]: sourceIds, [targetZone]: targetIds })
+    }
+
     // Perform the move/reorder
     if (sourceZone !== targetZone) {
       // Cross-zone move
@@ -124,17 +177,19 @@ export function DndProvider({ children }: DndProviderProps) {
       // Same-zone reorder
       await reorderBlock({ id: blockId, newPosition })
     }
-  }, [allBlocks, moveBlock, reorderBlock])
+  }, [moveBlock, reorderBlock])
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      {children}
-      <BlockDragOverlay activeBlock={activeBlock} />
-    </DndContext>
+    <DndOptimisticContext.Provider value={optimisticOrder}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        {children}
+        <BlockDragOverlay activeBlock={activeBlock} />
+      </DndContext>
+    </DndOptimisticContext.Provider>
   )
 }

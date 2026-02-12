@@ -15,7 +15,7 @@ export function BlockDragOverlay({ activeBlock }: BlockDragOverlayProps) {
   if (!activeBlock) return null
 
   return (
-    <DragOverlay>
+    <DragOverlay dropAnimation={null}>
       <div className="rounded-lg border border-border bg-card p-3 shadow-lg rotate-2 opacity-90 max-w-xs">
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">

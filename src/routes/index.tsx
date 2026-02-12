@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import type { Id } from "../../convex/_generated/dataModel"
-import { DroppableZone, SortableBlock, ZONES, type Zone } from "@/components/dnd"
+import { DroppableZone, SortableBlock, ZONES, useDndOptimistic, type Zone } from "@/components/dnd"
 import { useFileDrop } from "@/hooks/useFileDrop"
 import { useSession } from "@/contexts/SessionContext"
 import { GeneratePanel } from "@/components/GeneratePanel"
@@ -473,7 +473,19 @@ function ZoneColumn({
   }
 
   const sortedBlocks = blocks ? [...blocks].sort((a, b) => a.position - b.position) : []
-  const blockIds = sortedBlocks.map((b) => b._id)
+
+  // Use optimistic order if available (prevents flash-of-old-order after drop)
+  const optimistic = useDndOptimistic()
+  const optimisticIds = optimistic[zone]
+  const blockMap = useMemo(() => new Map(sortedBlocks.map((b) => [b._id, b])), [sortedBlocks])
+
+  const displayBlocks = useMemo(() => {
+    if (!optimisticIds) return sortedBlocks
+    return optimisticIds.map((id) => blockMap.get(id)).filter(Boolean) as typeof sortedBlocks
+  }, [optimisticIds, sortedBlocks, blockMap])
+
+  const displayIds = useMemo(() => displayBlocks.map((b) => b._id), [displayBlocks])
+
   const isDanger = zoneMetrics && zoneMetrics.percentUsed > 95
   const isWarning = zoneMetrics && zoneMetrics.percentUsed > 80 && zoneMetrics.percentUsed <= 95
 
@@ -504,16 +516,16 @@ function ZoneColumn({
         )}
       </div>
 
-      <DroppableZone zone={zone} itemIds={blockIds}>
+      <DroppableZone zone={zone} itemIds={displayIds}>
         <div className="flex-1 space-y-1.5 min-h-[60px] overflow-y-auto">
           {blocks === undefined ? (
             <div className="text-xs text-muted-foreground">Loading...</div>
-          ) : sortedBlocks.length === 0 ? (
+          ) : displayBlocks.length === 0 ? (
             <div className="text-xs text-muted-foreground text-center py-4 border border-dashed border-border rounded">
               Drop here
             </div>
           ) : (
-            sortedBlocks.map((block) => (
+            displayBlocks.map((block) => (
               <SortableBlock key={block._id} id={block._id} zone={block.zone} position={block.position}>
                 <BlockCard
                   id={block._id}
@@ -536,7 +548,7 @@ function ZoneColumn({
       </DroppableZone>
 
       {isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded z-10 pointer-events-none">
           <div className="text-xs font-medium text-primary">Drop file</div>
         </div>
       )}
