@@ -413,6 +413,7 @@ export const goToNextStep = mutation({
           tokens: block.tokens,
           originalTokens: block.originalTokens,
           tokenModel: block.tokenModel,
+          metadata: block.metadata,
         })
       }
     }
@@ -446,6 +447,7 @@ export const goToNextStep = mutation({
             position: maxPositions[zone],
             createdAt: now,
             updatedAt: now,
+            metadata: templateBlock.metadata,
           })
         }
       }

@@ -460,6 +460,10 @@ export const advanceStep = mutation({
           position: block.position,
           createdAt: now,
           updatedAt: now,
+          tokens: block.tokens,
+          originalTokens: block.originalTokens,
+          tokenModel: block.tokenModel,
+          metadata: block.metadata,
         })
       }
     }
@@ -493,6 +497,7 @@ export const advanceStep = mutation({
             position,
             createdAt: now,
             updatedAt: now,
+            metadata: blockData.metadata,
           })
         }
       }
