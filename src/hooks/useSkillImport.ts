@@ -3,6 +3,7 @@ import { useMutation } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { parseSkillMd, SkillParseError } from "@/lib/skills/parser"
+import type { Zone } from "@/components/dnd"
 import { parseSkillDirectory } from "@/lib/skills/directoryParser"
 import type { ParsedContextMap } from "@/lib/skills/contextMapParser"
 import JSZip from "jszip"
@@ -44,7 +45,8 @@ export function useSkillImport({
       raw: string,
       sourceType: "upload" | "url",
       sourceRef: string,
-      fallbackName?: string
+      fallbackName?: string,
+      zone?: Zone
     ) => {
       setIsImporting(true)
       try {
@@ -58,6 +60,7 @@ export function useSkillImport({
             sourceType,
             sourceRef,
           },
+          zone,
         })
         onSuccess?.(parsed.metadata.skillName, 0)
       } catch (err) {
@@ -161,7 +164,7 @@ export function useSkillImport({
   )
 
   const importFromFile = useCallback(
-    async (file: File) => {
+    async (file: File, zone?: Zone) => {
       if (file.name.toLowerCase().endsWith(".zip")) {
         await importFromZip(file)
         return
@@ -171,7 +174,8 @@ export function useSkillImport({
         raw,
         "upload",
         file.name,
-        file.name.replace(/\.md$/, "")
+        file.name.replace(/\.md$/, ""),
+        zone
       )
     },
     [importFromContent, importFromZip]

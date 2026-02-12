@@ -79,7 +79,7 @@ export function useFileDrop({ sessionId, zone, onSuccess, onError }: UseFileDrop
       for (const file of validFiles) {
         try {
           if (isSkillFile(file)) {
-            await importFromFile(file)
+            await importFromFile(file, zone)
           } else {
             const content = await file.text()
             const blockType = ZONE_TO_BLOCK_TYPE[zone]
