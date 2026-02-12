@@ -29,7 +29,7 @@ export function DroppableZone({ zone, itemIds, children }: DroppableZoneProps) {
       data-droppable-zone={zone}
       data-drop-active={isOver}
       className={`
-        flex-1 transition-colors duration-200
+        flex-1 min-h-0 flex flex-col transition-colors duration-200
         ${isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-inset" : ""}
       `}
     >
