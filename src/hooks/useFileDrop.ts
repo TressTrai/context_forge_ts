@@ -1,5 +1,8 @@
 /**
  * Hook for handling native file drops to create blocks.
+ *
+ * SKILL.md and .zip files are routed through the skill import flow.
+ * Other .md/.txt files create plain blocks in the target zone.
  */
 
 import { useState, useCallback } from "react"
@@ -7,15 +10,23 @@ import { useMutation } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Zone } from "@/components/dnd"
 import type { Id } from "../../convex/_generated/dataModel"
+import { useSkillImport } from "./useSkillImport"
 
-// Supported file extensions
-const SUPPORTED_EXTENSIONS = [".txt", ".md"]
-
-// Map zone to default block type for file drops
+// Map zone to default block type for plain file drops
 const ZONE_TO_BLOCK_TYPE: Record<Zone, string> = {
   PERMANENT: "SYSTEM",
   STABLE: "NOTE",
   WORKING: "NOTE",
+}
+
+function isSkillFile(file: File): boolean {
+  const name = file.name.toLowerCase()
+  return name === "skill.md" || name.endsWith(".zip")
+}
+
+function isSupportedFile(file: File): boolean {
+  const name = file.name.toLowerCase()
+  return name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".zip")
 }
 
 interface UseFileDropOptions {
@@ -29,11 +40,11 @@ export function useFileDrop({ sessionId, zone, onSuccess, onError }: UseFileDrop
   const [isDragOver, setIsDragOver] = useState(false)
   const createBlock = useMutation(api.blocks.create)
 
-  const isValidFile = useCallback((file: File): boolean => {
-    return SUPPORTED_EXTENSIONS.some((ext) =>
-      file.name.toLowerCase().endsWith(ext)
-    )
-  }, [])
+  const { importFromFile } = useSkillImport({
+    sessionId,
+    onSuccess: (name) => onSuccess?.(`Imported skill: ${name}`),
+    onError: (msg) => onError?.(msg),
+  })
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -58,32 +69,29 @@ export function useFileDrop({ sessionId, zone, onSuccess, onError }: UseFileDrop
       setIsDragOver(false)
 
       const files = Array.from(e.dataTransfer.files)
-      const validFiles = files.filter(isValidFile)
+      const validFiles = files.filter(isSupportedFile)
 
       if (validFiles.length === 0) {
-        onError?.("Only .txt and .md files are supported")
+        onError?.("Only .txt, .md, and .zip files are supported")
         return
       }
 
       for (const file of validFiles) {
         try {
-          const content = await file.text()
-          const blockType = ZONE_TO_BLOCK_TYPE[zone]
-
-          await createBlock({
-            sessionId,
-            content,
-            type: blockType,
-            zone,
-          })
-
-          onSuccess?.(file.name)
+          if (isSkillFile(file)) {
+            await importFromFile(file)
+          } else {
+            const content = await file.text()
+            const blockType = ZONE_TO_BLOCK_TYPE[zone]
+            await createBlock({ sessionId, content, type: blockType, zone })
+            onSuccess?.(file.name)
+          }
         } catch {
           onError?.(`Failed to add file: ${file.name}`)
         }
       }
     },
-    [sessionId, zone, createBlock, isValidFile, onSuccess, onError]
+    [sessionId, zone, createBlock, importFromFile, onSuccess, onError]
   )
 
   return {
