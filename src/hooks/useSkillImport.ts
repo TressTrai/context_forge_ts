@@ -4,11 +4,22 @@ import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { parseSkillMd, SkillParseError } from "@/lib/skills/parser"
 import { parseSkillDirectory } from "@/lib/skills/directoryParser"
+import type { ParsedContextMap } from "@/lib/skills/contextMapParser"
 import JSZip from "jszip"
 
 export interface ImportResult {
   skillName: string
   referenceCount: number
+}
+
+export interface PendingProjectImport {
+  skillName: string
+  skillDescription?: string
+  skillContent: string
+  contextMap: ParsedContextMap
+  files: { path: string; content: string }[]
+  sourceType: "upload" | "url"
+  sourceRef: string
 }
 
 interface UseSkillImportOptions {
@@ -23,8 +34,10 @@ export function useSkillImport({
   onError,
 }: UseSkillImportOptions) {
   const [isImporting, setIsImporting] = useState(false)
+  const [pendingProjectImport, setPendingProjectImport] = useState<PendingProjectImport | null>(null)
   const importSkill = useMutation(api.skills.importSkill)
   const importSkillWithRefs = useMutation(api.skills.importSkillWithReferences)
+  const importAsProject = useMutation(api.contextMapImport.importAsProject)
 
   const importFromContent = useCallback(
     async (
@@ -83,6 +96,22 @@ export function useSkillImport({
 
         const parsed = parseSkillDirectory(files, file.name.replace(/\.zip$/i, ""))
 
+        // Multi-context context-map → defer to project import confirmation
+        if (parsed.contextMap && parsed.contextMap.contexts.length > 1) {
+          setPendingProjectImport({
+            skillName: parsed.skill.metadata.skillName,
+            skillDescription: parsed.skill.metadata.skillDescription,
+            skillContent: parsed.skill.content,
+            contextMap: parsed.contextMap,
+            files: Array.from(files.entries()).map(([path, content]) => ({ path, content })),
+            sourceType: "upload",
+            sourceRef: file.name,
+          })
+          setIsImporting(false)
+          return
+        }
+
+        // Simple import (no context-map or single context)
         if (parsed.references.length > 0) {
           await importSkillWithRefs({
             sessionId,
@@ -173,7 +202,50 @@ export function useSkillImport({
     [importFromContent, onError]
   )
 
-  return { importFromFile, importFromUrl, importFromContent, isImporting }
+  const confirmProjectImport = useCallback(async () => {
+    if (!pendingProjectImport) return
+    setIsImporting(true)
+    try {
+      await importAsProject({
+        sessionId,
+        skillName: pendingProjectImport.skillName,
+        skillDescription: pendingProjectImport.skillDescription,
+        skillContent: pendingProjectImport.skillContent,
+        contexts: pendingProjectImport.contextMap.contexts.map((c) => ({
+          key: c.key,
+          label: c.label,
+          permanent: c.permanent,
+          stable: c.stable,
+          working: c.working,
+        })),
+        files: pendingProjectImport.files,
+        sourceType: pendingProjectImport.sourceType,
+        sourceRef: pendingProjectImport.sourceRef,
+      })
+      const count = pendingProjectImport.contextMap.contexts.length
+      setPendingProjectImport(null)
+      onSuccess?.(pendingProjectImport.skillName, count)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Project import failed"
+      onError?.(msg)
+    } finally {
+      setIsImporting(false)
+    }
+  }, [pendingProjectImport, sessionId, importAsProject, onSuccess, onError])
+
+  const cancelProjectImport = useCallback(() => {
+    setPendingProjectImport(null)
+  }, [])
+
+  return {
+    importFromFile,
+    importFromUrl,
+    importFromContent,
+    isImporting,
+    pendingProjectImport,
+    confirmProjectImport,
+    cancelProjectImport,
+  }
 }
 
 /**

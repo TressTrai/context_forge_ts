@@ -13,6 +13,7 @@ import type * as blocks from "../blocks.js";
 import type * as claudeNode from "../claudeNode.js";
 import type * as compression from "../compression.js";
 import type * as context from "../context.js";
+import type * as contextMapImport from "../contextMapImport.js";
 import type * as counters from "../counters.js";
 import type * as features from "../features.js";
 import type * as generations from "../generations.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   claudeNode: typeof claudeNode;
   compression: typeof compression;
   context: typeof context;
+  contextMapImport: typeof contextMapImport;
   counters: typeof counters;
   features: typeof features;
   generations: typeof generations;

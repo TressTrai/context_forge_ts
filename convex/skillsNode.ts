@@ -31,6 +31,8 @@ interface DiscoveredSkill {
   folderPath: string
   tokenEstimate: number
   references: DiscoveredReference[]
+  contextMapYaml?: string
+  contextCount?: number
 }
 
 /**
@@ -111,6 +113,17 @@ export const scanFolder = action({
           tokenEstimate: Math.ceil(f.content.length / 4),
         }))
 
+      // Check for context-map.yaml
+      const contextMapPath = path.join(skillDir, "context-map.yaml")
+      let contextMapYaml: string | undefined
+      let contextCount: number | undefined
+      if (fs.existsSync(contextMapPath)) {
+        contextMapYaml = fs.readFileSync(contextMapPath, "utf-8")
+        // Quick count of contexts via label occurrences
+        const matches = contextMapYaml.match(/^\s+label:/gm)
+        contextCount = matches?.length || 0
+      }
+
       skills.push({
         name: parsed.skillName,
         description: parsed.skillDescription,
@@ -118,6 +131,8 @@ export const scanFolder = action({
         folderPath: skillDir,
         tokenEstimate: Math.ceil(parsed.content.length / 4),
         references,
+        contextMapYaml,
+        contextCount,
       })
     }
 

@@ -21,7 +21,7 @@ const skillMetadataArg = v.object({
   parentSkillName: v.optional(v.string()),
 })
 
-async function getNextPosition(
+export async function getNextPosition(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
   zone: Zone
@@ -34,7 +34,7 @@ async function getNextPosition(
   return lastBlock ? lastBlock.position + 1 : 0
 }
 
-async function insertSkillBlock(
+export async function insertSkillBlock(
   ctx: MutationCtx,
   args: {
     sessionId: Id<"sessions">
@@ -77,7 +77,7 @@ async function insertSkillBlock(
   })
 }
 
-async function insertReferenceBlock(
+export async function insertReferenceBlock(
   ctx: MutationCtx,
   args: {
     sessionId: Id<"sessions">

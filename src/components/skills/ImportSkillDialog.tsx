@@ -11,6 +11,7 @@ import { DebouncedButton } from "@/components/ui/debounced-button"
 import { useSkillImport } from "@/hooks/useSkillImport"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { Puzzle, Upload, Link, FolderSearch, X, AlertCircle, CheckCircle2 } from "lucide-react"
+import { ImportProjectConfirmDialog } from "./ImportProjectConfirmDialog"
 import { cn } from "@/lib/utils"
 
 interface ImportSkillDialogProps {
@@ -55,7 +56,14 @@ export function ImportSkillDialog({
   const scanFolder = useAction(api.skillsNode.scanFolder)
   const importFromScan = useAction(api.skillsNode.importFromScan)
 
-  const { importFromFile, importFromUrl, isImporting } = useSkillImport({
+  const {
+    importFromFile,
+    importFromUrl,
+    isImporting,
+    pendingProjectImport,
+    confirmProjectImport,
+    cancelProjectImport,
+  } = useSkillImport({
     sessionId,
     onSuccess: (name, refCount) => {
       const refText = refCount ? ` (+ ${refCount} reference${refCount !== 1 ? "s" : ""})` : ""
@@ -308,6 +316,15 @@ export function ImportSkillDialog({
           )}
         </div>
       </div>
+
+      {pendingProjectImport && (
+        <ImportProjectConfirmDialog
+          pending={pendingProjectImport}
+          onConfirm={confirmProjectImport}
+          onCancel={cancelProjectImport}
+          isImporting={isImporting}
+        />
+      )}
     </div>
   )
 }

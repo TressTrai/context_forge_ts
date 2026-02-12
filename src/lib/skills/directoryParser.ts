@@ -12,6 +12,7 @@
 
 import type { Zone } from "@/components/dnd/types"
 import { parseSkillMd, type ParsedSkill } from "./parser"
+import { parseContextMap, type ParsedContextMap } from "./contextMapParser"
 
 export interface ReferenceFile {
   filename: string
@@ -23,6 +24,7 @@ export interface ReferenceFile {
 export interface ParsedSkillDirectory {
   skill: ParsedSkill
   references: ReferenceFile[]
+  contextMap?: ParsedContextMap
 }
 
 /**
@@ -108,5 +110,22 @@ export function parseSkillDirectory(
   // Sort references by path for consistent ordering
   references.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 
-  return { skill, references }
+  // Detect context-map.yaml
+  let contextMap: ParsedContextMap | undefined
+  for (const [path, content] of files) {
+    const filename = filenameFromPath(path)
+    if (
+      filename.toLowerCase() === "context-map.yaml" &&
+      !path.includes("/")
+    ) {
+      try {
+        contextMap = parseContextMap(content, new Set(files.keys()))
+      } catch {
+        // If context-map is invalid, skip it — import as simple skill
+      }
+      break
+    }
+  }
+
+  return { skill, references, contextMap }
 }
