@@ -1,5 +1,5 @@
 /**
- * Export Skill Dialog — download session as a skill ZIP package.
+ * Export Skill Dialog — download session or project as a skill ZIP package.
  */
 
 import { Button } from "@/components/ui/button"
@@ -11,16 +11,17 @@ interface ExportSkillDialogProps {
   isOpen: boolean
   onClose: () => void
   sessionId: Id<"sessions">
+  projectId?: Id<"projects"> | null
 }
 
 export function ExportSkillDialog({
   isOpen,
   onClose,
   sessionId,
+  projectId,
 }: ExportSkillDialogProps) {
-  const { exportAsZip, isExporting, isReady, blockCount } = useSkillExport({
-    sessionId,
-  })
+  const { exportAsZip, isExporting, isReady, isProject, blockCount, stepCount } =
+    useSkillExport({ sessionId, projectId })
 
   if (!isOpen) return null
 
@@ -36,7 +37,9 @@ export function ExportSkillDialog({
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-600" />
-            <h2 className="text-lg font-semibold">Export as Skill</h2>
+            <h2 className="text-lg font-semibold">
+              {isProject ? "Export Project" : "Export as Skill"}
+            </h2>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -46,7 +49,9 @@ export function ExportSkillDialog({
         {/* Content */}
         <div className="p-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Export this session as a Claude Code-compatible skill package (.zip).
+            {isProject
+              ? "Export this project as a Claude Code-compatible skill package with context-map (.zip)."
+              : "Export this session as a Claude Code-compatible skill package (.zip)."}
           </p>
 
           <div className="text-sm space-y-1">
@@ -54,6 +59,12 @@ export function ExportSkillDialog({
               <span className="text-muted-foreground">Blocks:</span>
               <span className="font-medium">{blockCount}</span>
             </div>
+            {isProject && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Steps:</span>
+                <span className="font-medium">{stepCount}</span>
+              </div>
+            )}
           </div>
 
           <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2.5">
@@ -63,6 +74,9 @@ export function ExportSkillDialog({
               <li>references/permanent/ — permanent zone blocks</li>
               <li>references/stable/ — stable zone blocks</li>
               <li>references/working/ — working zone blocks</li>
+              {isProject && (
+                <li>context-map.yaml — workflow step definitions</li>
+              )}
             </ul>
           </div>
         </div>
