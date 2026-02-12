@@ -14,6 +14,11 @@
 | [FRONTEND_GUIDE.md](./FRONTEND_GUIDE.md) | Frontend patterns for developers from React Router/Redux |
 | [CLI_COMMANDS.md](./CLI_COMMANDS.md) | Quick reference for `convex run` commands |
 
+### User Guides
+| Document | Description |
+|----------|-------------|
+| [GUIDE-skill-writing.md](./GUIDE-skill-writing.md) | Using ContextForge to write Claude Code skills (TDD workflow) |
+
 ### Reference
 | Document | Description |
 |----------|-------------|
