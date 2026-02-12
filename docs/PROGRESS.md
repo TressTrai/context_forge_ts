@@ -730,3 +730,182 @@ pnpm build          # needs verification
 
 1. Verify build works with new dependencies
 2. Continue Sprint 2: BUG-001 (drag-drop), remaining TASK-004 items, BUG-004, TASK-008
+
+---
+
+## Session 11: Sprint 2 Fixes & SKILL.md Import (2026-02-11)
+
+### Accomplishments
+
+#### BUG-004: Save Dropdown Positioning
+- [x] Replaced custom `ZoneSelector` with Radix `DropdownMenu`
+- [x] Built-in collision detection — dropdown flips upward when no space below
+- [x] Portal rendering — never clipped by scroll containers
+- [x] Keyboard navigation and focus management
+
+#### TASK-008: Brainstorm Input Sizing
+- [x] Auto-expanding textarea that grows with content
+- [x] Min height ~80px, max height ~300px
+- [x] Scrollbar appears when content exceeds max height
+- [x] Shrinks back when content is deleted
+
+#### TASK-012: SKILL.md Import System
+- [x] SKILL.md parser — pure function, zero deps (`src/lib/skills/parser.ts`)
+- [x] Directory/ZIP parser (`src/lib/skills/directoryParser.ts`)
+- [x] Convex import mutation (`convex/skills.ts`)
+- [x] Node.js folder scan action (`convex/skillsNode.ts`) — feature-flagged for local deployment
+- [x] Import modal UI (`src/components/ImportSkillModal.tsx`)
+- [x] `skill` block type with metadata (name, description, source, provenance)
+- [x] Three intake mechanisms: file upload, URL import, local folder scan
+- [x] ZIP support with reference files
+- [x] Skill block rendering with distinct icon and metadata display
+
+#### Skills Ecosystem Research
+- [x] Research document on Agent Skills ecosystem (`docs/research/skilleco.md`)
+- [x] Design document for SKILL.md import (`docs/completed/2026-02-11-skill-import-design.md`)
+
+### Decisions Made
+
+#### 16. SKILL.md Parser Design
+
+**Decision:** Pure function parser with zero dependencies, shared between client and server.
+
+**Rationale:**
+- Convex actions have runtime constraints — can't use heavy deps
+- Parser needs to work both client-side (for file upload preview) and server-side (for folder scan)
+- SKILL.md format is simple enough for a hand-written parser
+
+#### 17. Skill Block Type
+
+**Decision:** New `skill` block type rather than reusing existing types.
+
+**Rationale:**
+- Skills have distinct metadata (name, description, provenance, source URL)
+- Need distinct rendering (icon, title, description subtitle)
+- Template persistence requires knowing which blocks are skills
+- Clean separation from user-authored content blocks
+
+### Current State
+
+```bash
+pnpm tsc --noEmit   # ✓ Passes
+pnpm vitest run     # ✓ 94 tests pass
+pnpm build          # ✓ Builds successfully
+```
+
+---
+
+## Session 12: Context-Map Import/Export (2026-02-12)
+
+### Accomplishments
+
+#### Context-Map YAML Specification
+- [x] Defined `context-map.yaml` format for mapping workflow steps to reference files
+- [x] Parser for context-map YAML (`src/lib/skills/contextMapParser.ts`)
+- [x] Comprehensive tests for parser
+
+#### Multi-Context Import
+- [x] ZIP import with `context-map.yaml` — creates project with multiple sessions
+- [x] Each context in the map becomes a separate session with its own blocks
+- [x] Reference files in the ZIP are distributed to appropriate sessions
+- [x] Block metadata preserved during session transitions
+
+#### Export System
+- [x] Single-session skill export with ZIP download
+- [x] Project export with auto-generated `context-map.yaml`
+- [x] Title extraction utilities for meaningful export filenames (`src/lib/skills/titleExtractor.ts`)
+
+#### Drag-and-Drop Integration
+- [x] Multi-context ZIP files importable via drag-and-drop
+- [x] Skill files (.zip, SKILL.md) routed through skill import flow
+- [x] Drop zone respected when importing skills
+
+#### Zone Scrolling Fix
+- [x] Enabled zone scrolling for sessions with many blocks
+
+### Decisions Made
+
+#### 18. Context-Map as YAML
+
+**Decision:** Use YAML for context-map rather than JSON or TOML.
+
+**Rationale:**
+- YAML is more human-readable/editable than JSON
+- Natural fit for the hierarchical context → files structure
+- Common in CI/CD and config files — developers are familiar
+- Comments supported (useful for documenting skill sources)
+
+### Files Created/Modified
+- `src/lib/skills/contextMapParser.ts` — Context-map YAML parser
+- `src/lib/skills/contextMapParser.test.ts` — Parser tests
+- `src/lib/skills/titleExtractor.ts` — Title extraction utilities
+- `src/lib/skills/titleExtractor.test.ts` — Title extraction tests
+- `docs/completed/2026-02-12-context-map-import-export-design.md` — Design document
+- `docs/VERIFICATION-context-map-import-export.md` — Manual verification guide
+- `docs/data/` — Sample data files for verification
+
+### Current State
+
+```bash
+pnpm tsc --noEmit   # ✓ Passes
+pnpm vitest run     # ✓ 94 tests pass
+```
+
+---
+
+## Session 13: DnD Stabilization (2026-02-12)
+
+### Accomplishments
+
+#### BUG-001: Drag-and-Drop Reordering — Complete Fix
+
+Identified and fixed 8 root causes for flaky drag-and-drop:
+
+1. **Convex live queries re-rendered DndContext mid-drag** — Stored `allBlocks` in `useRef` so callbacks don't recreate
+2. **`closestCenter` collision detection unstable** — Switched to `closestCorners`
+3. **Native file-drop handlers intercepted @dnd-kit events** — Added `Files` type guards in `useFileDrop`
+4. **File-drop overlay blocked pointer events** — Added `pointer-events-none`
+5. **Entire block was drag target** — Added `GripVertical` drag handle, moved `listeners`/`attributes` to handle only
+6. **DragOverlay drop animation interfered with re-drags** — Set `dropAnimation={null}`
+7. **Flash-of-old-order after drop** — Implemented optimistic zone ordering via `DndOptimisticContext` + `arrayMove`
+8. **Enter key started stuck keyboard drag** — Added `blur()` in `handleDragEnd`
+
+### Decisions Made
+
+#### 19. Optimistic Zone Ordering Pattern
+
+**Decision:** Use React context (`DndOptimisticContext`) to share optimistic block order between `DndProvider` and `ZoneColumn`.
+
+**Rationale:**
+- After drop, @dnd-kit removes CSS transforms → items snap to server positions → mutation round-trips → new data arrives
+- This creates a visible "flash-of-old-order" — items briefly show old order before new order appears
+- Optimistic state bridges the gap: compute expected order with `arrayMove` before mutation, clear when server data catches up
+- React context is lightweight and doesn't require state management library
+
+#### 20. Dedicated Drag Handle
+
+**Decision:** Use a visible `GripVertical` icon as the drag handle instead of making the entire block draggable.
+
+**Rationale:**
+- Block cards contain interactive elements (buttons, links, checkboxes)
+- Making the entire card draggable causes conflicts — clicks on buttons can initiate drags
+- Dedicated handle is a clear affordance — users know exactly where to grab
+- Common pattern (Trello, Notion, Linear all use drag handles)
+- `activationConstraint: { distance: 8 }` becomes less critical with an explicit handle
+
+### Files Modified
+- `src/components/dnd/DndProvider.tsx` — Ref-stabilize, optimistic ordering, closestCorners, blur
+- `src/components/dnd/SortableBlock.tsx` — Drag handle with GripVertical
+- `src/components/dnd/BlockDragOverlay.tsx` — dropAnimation={null}
+- `src/components/dnd/index.ts` — Export useDndOptimistic
+- `src/hooks/useFileDrop.ts` — File-only guards
+- `src/routes/index.tsx` — Optimistic rendering, pointer-events-none overlay
+
+### Current State
+
+```bash
+pnpm tsc --noEmit   # ✓ Passes
+pnpm vitest run     # ✓ 94 tests pass
+```
+
+**All Sprint 2 and Sprint 3 work is complete.** Next up: Sprint 4 (Feature Completeness).

@@ -187,8 +187,13 @@ Radix DropdownMenu handles open/close state internally.
 
 Medium - Frustrating UX but workaround exists (scroll down)
 
+## Status
+
+✅ **Fixed** — 2026-02-11 (commit `9faf79f`)
+
+Replaced custom `ZoneSelector` with Radix `DropdownMenu` which has built-in collision detection. Dropdown now flips upward when there's insufficient space below.
+
 ## Notes
 
-- Check if `@radix-ui/react-dropdown-menu` is already installed (shadcn/ui includes it)
-- If using shadcn/ui, may already have a DropdownMenu component in `src/components/ui/`
+- Used existing shadcn/ui DropdownMenu component
 - Same pattern could improve other dropdowns in the app

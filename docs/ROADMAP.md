@@ -85,6 +85,8 @@ blocks: defineTable({
 
 **Goal:** Drag blocks between zones and reorder within zones.
 
+**Status:** ✅ Complete (stabilized 2026-02-12)
+
 ### Dependencies
 - Install `@dnd-kit/core` and `@dnd-kit/sortable`
 - Reference: [Trellaux example](https://tanstack.com/start/latest/docs/framework/react/examples/start-convex-trellaux)
@@ -95,7 +97,16 @@ blocks: defineTable({
 - [x] Visual drag feedback (DragOverlay)
 - [x] Call `move` mutation on cross-zone drop
 - [x] Call `reorder` mutation on same-zone drop
-- [x] File drop support (.txt, .md)
+- [x] File drop support (.txt, .md, .zip)
+
+### Stabilization (2026-02-12)
+- [x] Ref-stabilized callbacks to prevent mid-drag re-renders from Convex live queries
+- [x] Switched `closestCenter` → `closestCorners` collision detection
+- [x] Added dedicated drag handle (GripVertical) — prevents conflicts with interactive elements
+- [x] Optimistic zone ordering via React context — eliminates flash-of-old-order
+- [x] File-drop handlers guarded for file-only drags — no interference with @dnd-kit
+- [x] Disabled DragOverlay drop animation
+- [x] Blur active element on drag end — prevents stuck keyboard drags
 
 ### Tests
 - [x] E2E drag-drop tests
@@ -295,24 +306,50 @@ snapshots: defineTable({
 
 **Goal:** Import Agent Skills (SKILL.md) as first-class blocks for compatibility with the skills ecosystem.
 
-**Status:** Designed
+**Status:** ✅ Complete
 
-**Design:** See [plans/2026-02-11-skill-import-design.md](./plans/2026-02-11-skill-import-design.md)
+**Design:** See [completed/2026-02-11-skill-import-design.md](./completed/2026-02-11-skill-import-design.md)
 
 ### Features
-- [ ] New `skill` block type with metadata (name, description, source, provenance)
-- [ ] SKILL.md parser — pure function, zero deps, shared across client/server
-- [ ] Local folder scan — read `~/.claude/skills/` (local deployment only, feature-flagged)
-- [ ] File upload — drag-and-drop .md/.zip in the UI
-- [ ] URL import — paste GitHub URLs to fetch SKILL.md
-- [ ] Skill block rendering — distinct icon, skill name as title, description subtitle
-- [ ] Template-based persistence — skills bundled into templates for reuse
+- [x] New `skill` block type with metadata (name, description, source, provenance)
+- [x] SKILL.md parser — pure function, zero deps, shared across client/server
+- [x] Local folder scan — read `~/.claude/skills/` (local deployment only, feature-flagged)
+- [x] File upload — drag-and-drop .md/.zip in the UI
+- [x] URL import — paste GitHub URLs to fetch SKILL.md
+- [x] Skill block rendering — distinct icon, skill name as title, description subtitle
+- [x] Template-based persistence — skills bundled into templates for reuse
+- [x] ZIP support with reference files
 
-### Files (Planned)
+### Files
 - `src/lib/skills/parser.ts` - SKILL.md parser
-- `convex/skills.ts` - Import mutation + folder scan Node action
+- `src/lib/skills/directoryParser.ts` - ZIP/directory parsing
+- `convex/skills.ts` - Import mutation
+- `convex/skillsNode.ts` - Local folder scan Node action
 - `src/components/ImportSkillModal.tsx` - Import UI
 - `src/lib/blockTypes.ts` - Updated with `skill` type
+
+---
+
+## Slice 5.9: Context-Map Import/Export
+
+**Goal:** Bidirectional skill import/export via `context-map.yaml` for multi-context project management.
+
+**Status:** ✅ Complete
+
+**Design:** See [completed/2026-02-12-context-map-import-export-design.md](./completed/2026-02-12-context-map-import-export-design.md)
+
+### Features
+- [x] `context-map.yaml` specification for mapping workflow steps to reference files
+- [x] Multi-context ZIP import — creates project with multiple sessions from context-map
+- [x] Single-session skill export with ZIP download
+- [x] Project export with context-map.yaml generation
+- [x] Title extraction and filename utilities for export
+- [x] Drag-and-drop import for multi-context ZIPs
+- [x] Block metadata preservation during session transitions
+
+### Files
+- `src/lib/skills/contextMapParser.ts` - Context-map YAML parser
+- `src/lib/skills/titleExtractor.ts` - Block title extraction for export filenames
 
 ---
 
@@ -320,13 +357,18 @@ snapshots: defineTable({
 
 **Goal:** Refinements based on usage.
 
+**Status:** 🔨 In Progress
+
 - [ ] Theme system (proper provider)
 - [x] Markdown preview in editor (PR #1: view/edit toggle with react-markdown)
 - [x] Markdown rendering in BrainstormDialog (PR #1: replaced regex parser)
 - [ ] Search/filter blocks
 - [ ] Block type icons
-- [x] Import/export (SKILL.md import via Slice 5.8; general export TBD)
+- [x] Import/export (SKILL.md import via Slice 5.8; context-map via Slice 5.9)
 - [x] Compression system (TASK-010: multi-provider compression)
+- [x] Save dropdown positioning (BUG-004: Radix DropdownMenu with collision detection)
+- [x] Auto-expanding brainstorm input (TASK-008)
+- [x] Drag-and-drop stabilization (BUG-001: 8 fixes applied)
 
 ---
 
@@ -337,29 +379,30 @@ snapshots: defineTable({
 | 0. Project Setup | ✅ Done | Counter demo working |
 | 1. Basic Blocks | ✅ Done | CRUD + E2E test isolation |
 | 2. Zones | ✅ Done | Three-column layout + move |
-| 3. Drag and Drop | ✅ Done | @dnd-kit + file drop |
+| 3. Drag and Drop | ✅ Done | @dnd-kit + file drop + stabilization (8 fixes) |
 | 4. Block Editor | ✅ Done | TanStack Router + edit page |
 | 4.5. Sessions | ✅ Done | Session isolation + snapshots |
 | 5. LLM Integration | ✅ Done | Ollama + Claude Code streaming |
 | 5.5. Brainstorming | ✅ Done | Multi-turn, OpenRouter, LangFuse |
 | 5.6. Workflows | ✅ Done | Templates, projects, workflows |
 | 5.7. Token Budgets | ✅ Done | js-tiktoken, zone budgets, UI |
-| 5.8. Skill Import | 📋 Designed | SKILL.md as blocks, three intake mechanisms, template persistence |
-| 6. Polish | 🔨 In Progress | Markdown ✅, Compression ✅. Remaining: theme, search, block type icons |
+| 5.8. Skill Import | ✅ Done | SKILL.md + ZIP import, three intake mechanisms |
+| 5.9. Context-Map | ✅ Done | Bidirectional import/export, multi-context projects |
+| 6. Polish | 🔨 In Progress | Markdown ✅, Compression ✅, DnD ✅, Save dropdown ✅, Input sizing ✅. Remaining: theme, search, block type icons |
 
 ---
 
 ## Dependency Graph
 
 ```
-Slice 1: Basic Blocks
+Slice 1: Basic Blocks ✅
         │
         ▼
-Slice 2: Zones
+Slice 2: Zones ✅
         │
         ├────────────────┐
         ▼                ▼
-Slice 3: DnD    Slice 4: Editor
+Slice 3: DnD ✅  Slice 4: Editor ✅
         │                │
         └───────┬────────┘
                 ▼
@@ -377,10 +420,10 @@ Slice 3: DnD    Slice 4: Editor
                 ▼
    Slice 5.7: Token Budgets ✅
                 │
-        ┌───────┴───────┐
-        ▼               ▼
- Slice 5.8:       Slice 6:
- Skill Import 📋  Polish 🔨
+        ┌───────┼───────┐
+        ▼       ▼       ▼
+ Slice 5.8: Slice 5.9: Slice 6:
+ Skill ✅   CtxMap ✅   Polish 🔨
 ```
 
 ---

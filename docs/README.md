@@ -32,7 +32,7 @@
 ### Tasks & Bugs
 | Directory | Description |
 |-----------|-------------|
-| [tasks/](./tasks/) | Open tasks and bug reports |
+| [tasks/](./tasks/) | Open tasks and bug reports (8 remaining) |
 | [BugReports/](./BugReports/) | Bug analysis documents |
 | [completed/tasks/](./completed/tasks/) | Completed task documentation |
 
@@ -40,12 +40,26 @@
 | Feature | Status | Documentation |
 |---------|--------|---------------|
 | Compression | ✅ Completed | [features/compression/](./features/compression/) |
+| SKILL.md Import | ✅ Completed | [completed/2026-02-11-skill-import-design.md](./completed/2026-02-11-skill-import-design.md) |
+| Context-Map Import/Export | ✅ Completed | [completed/2026-02-12-context-map-import-export-design.md](./completed/2026-02-12-context-map-import-export-design.md) |
+
+### Research
+| Document | Description |
+|----------|-------------|
+| [research/skilleco.md](./research/skilleco.md) | Skills ecosystem research |
 
 ### Design
 | Document | Description |
 |----------|-------------|
 | [design/DESIGN-block-type-usage.md](./design/DESIGN-block-type-usage.md) | Block type documentation |
 | [design/DESIGN-brainstorm-questioning.md](./design/DESIGN-brainstorm-questioning.md) | Future: Brainstorm questioning modes |
+
+---
+
+### Verification Guides
+| Document | Description |
+|----------|-------------|
+| [VERIFICATION-context-map-import-export.md](./VERIFICATION-context-map-import-export.md) | Manual verification for context-map import/export |
 
 ---
 
@@ -60,6 +74,8 @@ Documents for features that have been fully implemented. Kept for historical ref
 | [LLM_IMPLEMENTATION_PLAN.md](./completed/LLM_IMPLEMENTATION_PLAN.md) | Original LLM integration plan (implemented) |
 | [PROMPT_ASSEMBLY_REFACTOR.md](./completed/PROMPT_ASSEMBLY_REFACTOR.md) | System prompt extraction (implemented) |
 | [CONVEX_VERCEL_AI_ARCHITECTURE.md](./completed/CONVEX_VERCEL_AI_ARCHITECTURE.md) | Vercel AI evaluation (decided not to use) |
+| [2026-02-11-skill-import-design.md](./completed/2026-02-11-skill-import-design.md) | SKILL.md import system (implemented) |
+| [2026-02-12-context-map-import-export-design.md](./completed/2026-02-12-context-map-import-export-design.md) | Context-map bidirectional import/export (implemented) |
 
 ---
 

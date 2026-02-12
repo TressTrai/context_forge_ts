@@ -178,8 +178,13 @@ const [isExpanded, setIsExpanded] = useState(false)
 
 Medium - Quality of life improvement
 
+## Status
+
+✅ **Completed** — 2026-02-11 (commit `9faf79f`)
+
+Implemented Option B (auto-expanding textarea). Textarea grows with content up to max height, then shows scrollbar.
+
 ## Notes
 
 - Consider applying same fix to GeneratePanel textarea
 - Auto-expand is a common pattern (Slack, Discord, ChatGPT all use it)
-- Keep max height reasonable to leave room for conversation display
