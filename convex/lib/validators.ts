@@ -45,7 +45,9 @@ export const blockTypeValidator = v.union(
   v.literal("instruction"),
   // Meta Types
   v.literal("persona"),
-  v.literal("framework")
+  v.literal("framework"),
+  // Skill Types
+  v.literal("skill")
 )
 
 export type BlockType =
@@ -61,3 +63,4 @@ export type BlockType =
   | "instruction"
   | "persona"
   | "framework"
+  | "skill"

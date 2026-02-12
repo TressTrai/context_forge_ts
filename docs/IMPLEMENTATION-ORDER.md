@@ -19,7 +19,7 @@ Prioritized implementation order for ContextForgeTS tasks and bugs based on:
 | BUG-001 | Bug | Drag-drop reordering | Low | Medium | Speculative |
 | BUG-002 | Bug | Brainstorm input blocked | High | Low | ✅ **Completed** |
 | BUG-003 | Bug | Test connection before save | Low | Low | Documented |
-| BUG-004 | Bug | Save dropdown positioning | Medium | Low | Documented |
+| BUG-004 | Bug | Save dropdown positioning | Medium | Low | ✅ **Completed** |
 | TASK-001 | Feature | Public templates & workflows | Low | High | Documented |
 | TASK-002 | Feature | Delete confirmation dialogs | **Critical** | Low | ✅ **Completed** |
 | TASK-003 | Feature | Session deletion | Medium | Low | Documented |
@@ -27,7 +27,7 @@ Prioritized implementation order for ContextForgeTS tasks and bugs based on:
 | TASK-005 | Feature | Block title extraction | Medium | Low | Documented |
 | TASK-006 | Feature | Zone move from editor | Medium | Low | Documented |
 | TASK-007 | Feature | Keyboard shortcuts system | Low | High | Documented |
-| TASK-008 | Feature | Brainstorm input sizing | Medium | Low | Documented |
+| TASK-008 | Feature | Brainstorm input sizing | Medium | Low | ✅ **Completed** |
 | TASK-009 | Feature | Unsaved brainstorm warning | High | Medium | ✅ **Completed** |
 | TASK-010 | Feature | Compression system | Medium | High | ✅ **Completed** |
 | TASK-011 | Design | Interface design enhancement | Low | High | Documented |

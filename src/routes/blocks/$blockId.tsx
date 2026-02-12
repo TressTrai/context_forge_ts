@@ -18,6 +18,7 @@ import ReactMarkdown from "react-markdown"
 import gfm from "remark-gfm"
 import breaks from "remark-breaks"
 import { MarkdownComponents } from "@/components/MarkdownComponents"
+import { Puzzle, Upload, Link as LinkIcon, FolderSearch } from "lucide-react"
 
 // Format date for display
 function formatDate(timestamp: number): string {
@@ -139,6 +140,38 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
           </span>
         </div>
       </div>
+
+      {/* Skill metadata (read-only) */}
+      {block.type === "skill" && block.metadata && (
+        <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1">
+          <div className="flex items-center gap-2">
+            <Puzzle className="w-4 h-4 text-amber-600" />
+            <span className="font-medium">{block.metadata.skillName}</span>
+            {block.metadata.sourceType === "local" && <FolderSearch className="w-3.5 h-3.5 text-muted-foreground" />}
+            {block.metadata.sourceType === "upload" && <Upload className="w-3.5 h-3.5 text-muted-foreground" />}
+            {block.metadata.sourceType === "url" && <LinkIcon className="w-3.5 h-3.5 text-muted-foreground" />}
+          </div>
+          {block.metadata.skillDescription && (
+            <p className="text-sm text-muted-foreground">{block.metadata.skillDescription}</p>
+          )}
+          {block.metadata.sourceRef && (
+            <p className="text-xs text-muted-foreground font-mono truncate">{block.metadata.sourceRef}</p>
+          )}
+        </div>
+      )}
+
+      {/* Reference-from-skill metadata (read-only) */}
+      {block.type === "reference" && block.metadata?.parentSkillName && (
+        <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1">
+          <div className="flex items-center gap-2">
+            <Puzzle className="w-4 h-4 text-indigo-600" />
+            <span className="text-sm">Reference from skill: <span className="font-medium">{block.metadata.parentSkillName}</span></span>
+          </div>
+          {block.metadata.sourceRef && (
+            <p className="text-xs text-muted-foreground font-mono truncate">{block.metadata.sourceRef}</p>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-border">

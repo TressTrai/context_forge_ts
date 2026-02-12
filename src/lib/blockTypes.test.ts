@@ -12,8 +12,8 @@ import {
 } from "./blockTypes"
 
 describe("BLOCK_TYPES", () => {
-  it("contains 12 block types", () => {
-    expect(BLOCK_TYPES).toHaveLength(12)
+  it("contains 13 block types", () => {
+    expect(BLOCK_TYPES).toHaveLength(13)
   })
 
   it("includes all expected types", () => {
@@ -30,6 +30,7 @@ describe("BLOCK_TYPES", () => {
       "instruction",
       "persona",
       "framework",
+      "skill",
     ]
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedTypes))
   })
@@ -48,7 +49,7 @@ describe("BLOCK_TYPE_METADATA", () => {
       expect(meta.displayName).toBeTruthy()
       expect(meta.description).toBeTruthy()
       expect(["PERMANENT", "STABLE", "WORKING"]).toContain(meta.defaultZone)
-      expect(["core", "document", "conversation", "meta"]).toContain(meta.category)
+      expect(["core", "document", "conversation", "meta", "skill"]).toContain(meta.category)
       expect(meta.icon).toBeTruthy()
       expect(meta.color).toBeTruthy()
     }
@@ -65,12 +66,16 @@ describe("BLOCK_TYPE_METADATA", () => {
   it("template has STABLE as default zone", () => {
     expect(BLOCK_TYPE_METADATA.template.defaultZone).toBe("STABLE")
   })
+
+  it("skill has STABLE as default zone", () => {
+    expect(BLOCK_TYPE_METADATA.skill.defaultZone).toBe("STABLE")
+  })
 })
 
 describe("getBlockTypesByCategory", () => {
-  it("returns all 4 categories", () => {
+  it("returns all 5 categories", () => {
     const categories = getBlockTypesByCategory()
-    expect(Object.keys(categories)).toEqual(["core", "document", "conversation", "meta"])
+    expect(Object.keys(categories)).toEqual(["core", "document", "conversation", "meta", "skill"])
   })
 
   it("groups types correctly", () => {
@@ -91,6 +96,8 @@ describe("getBlockTypesByCategory", () => {
 
     expect(categories.meta).toContain("persona")
     expect(categories.meta).toContain("framework")
+
+    expect(categories.skill).toContain("skill")
   })
 
   it("total types across categories equals BLOCK_TYPES length", () => {
@@ -145,5 +152,6 @@ describe("CATEGORY_LABELS", () => {
     expect(CATEGORY_LABELS.document).toBe("Documents")
     expect(CATEGORY_LABELS.conversation).toBe("Conversation")
     expect(CATEGORY_LABELS.meta).toBe("Meta")
+    expect(CATEGORY_LABELS.skill).toBe("Skills")
   })
 })

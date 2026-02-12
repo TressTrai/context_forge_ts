@@ -130,6 +130,7 @@ export const createFromSession = mutation({
       type: block.type,
       zone: block.zone as "PERMANENT" | "STABLE" | "WORKING",
       position: block.position,
+      metadata: block.metadata,
     }))
 
     const now = Date.now()
@@ -230,6 +231,7 @@ export const applyToSession = mutation({
         position,
         createdAt: now,
         updatedAt: now,
+        metadata: blockData.metadata,
       })
     }
 

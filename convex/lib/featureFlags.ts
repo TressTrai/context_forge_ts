@@ -27,6 +27,15 @@ export function isOAuthEnabled(): boolean {
 }
 
 /**
+ * Check if local skill folder scanning is enabled.
+ * Defaults to false (disabled) if not explicitly set to "true".
+ * Typically enabled for local development only (requires filesystem access).
+ */
+export function isSkillScanEnabled(): boolean {
+  return process.env.SKILL_SCAN_ENABLED === "true"
+}
+
+/**
  * All feature flags.
  */
 export const FEATURES = {
@@ -35,5 +44,8 @@ export const FEATURES = {
   },
   get OAUTH_ENABLED() {
     return isOAuthEnabled()
+  },
+  get SKILL_SCAN_ENABLED() {
+    return isSkillScanEnabled()
   },
 }

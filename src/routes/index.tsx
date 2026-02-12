@@ -27,11 +27,12 @@ import {
 import { useNavigate } from "@tanstack/react-router"
 import { useCompression } from "@/hooks/useCompression"
 import { useConfirmDelete } from "@/hooks/useConfirmDelete"
-import { Minimize2 } from "lucide-react"
+import { Minimize2, Puzzle, Upload, Link as LinkIcon, FolderSearch } from "lucide-react"
 import { CompressionDialog } from "@/components/compression/CompressionDialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DebouncedButton } from "@/components/ui/debounced-button"
 import { useToast } from "@/components/ui/toast"
+import { ImportSkillDialog } from "@/components/skills/ImportSkillDialog"
 
 // Zone display info
 const ZONE_INFO: Record<Zone, { label: string; description: string }> = {
@@ -206,6 +207,7 @@ function BlockCard({
   sessionId,
   isSelected,
   onSelect,
+  metadata,
 }: {
   id: Id<"blocks">
   content: string
@@ -218,6 +220,13 @@ function BlockCard({
   sessionId: Id<"sessions">
   isSelected?: boolean
   onSelect?: (selected: boolean) => void
+  metadata?: {
+    skillName: string
+    skillDescription?: string
+    sourceType: "local" | "upload" | "url"
+    sourceRef?: string
+    parentSkillName?: string
+  }
 }) {
   const [showActions, setShowActions] = useState(false)
   const removeBlock = useMutation(api.blocks.remove)
@@ -344,6 +353,23 @@ function BlockCard({
           </div>
         )}
       </div>
+      {type === "skill" && metadata?.skillName && (
+        <div className="flex items-center gap-1 mb-0.5">
+          <span className="text-xs font-medium truncate">{metadata.skillName}</span>
+          {metadata.sourceType === "local" && <FolderSearch className="w-3 h-3 text-muted-foreground shrink-0" />}
+          {metadata.sourceType === "upload" && <Upload className="w-3 h-3 text-muted-foreground shrink-0" />}
+          {metadata.sourceType === "url" && <LinkIcon className="w-3 h-3 text-muted-foreground shrink-0" />}
+        </div>
+      )}
+      {type === "skill" && metadata?.skillDescription && (
+        <p className="text-[10px] text-muted-foreground line-clamp-1 mb-0.5">{metadata.skillDescription}</p>
+      )}
+      {type === "reference" && metadata?.parentSkillName && (
+        <div className="flex items-center gap-1 mb-0.5">
+          <Puzzle className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
+          <span className="text-[10px] text-muted-foreground truncate">from: {metadata.parentSkillName}</span>
+        </div>
+      )}
       <p className="text-xs text-foreground whitespace-pre-wrap break-words line-clamp-2 leading-tight">
         {content}
       </p>
@@ -495,6 +521,7 @@ function ZoneColumn({
                   sessionId={sessionId}
                   isSelected={selectedBlockIds.has(block._id)}
                   onSelect={(selected) => onBlockSelect(block._id, selected)}
+                  metadata={block.metadata ?? undefined}
                 />
               </SortableBlock>
             ))
@@ -645,6 +672,7 @@ function HomePage() {
   const { sessionId, isLoading } = useSession()
   const [selectedBlockIds, setSelectedBlockIds] = useState<Set<Id<"blocks">>>(new Set())
   const [isCompressionDialogOpen, setIsCompressionDialogOpen] = useState(false)
+  const [isImportSkillOpen, setIsImportSkillOpen] = useState(false)
   const { toast } = useToast()
 
   // Fetch all blocks for multi-select compression
@@ -721,6 +749,15 @@ function HomePage() {
         <div className="flex items-center gap-2">
           <SessionMetrics sessionId={sessionId} collapsed />
           <AddBlockForm sessionId={sessionId} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsImportSkillOpen(true)}
+            className="h-7 text-xs"
+          >
+            <Puzzle className="w-3 h-3 mr-1" />
+            Import Skill
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <BrainstormPanel sessionId={sessionId} compact />
@@ -767,6 +804,15 @@ function HomePage() {
         result={mergeResult}
         error={mergeError}
       />
+
+      {/* Import Skill dialog */}
+      {sessionId && (
+        <ImportSkillDialog
+          isOpen={isImportSkillOpen}
+          onClose={() => setIsImportSkillOpen(false)}
+          sessionId={sessionId}
+        />
+      )}
     </div>
   )
 }

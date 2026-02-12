@@ -27,6 +27,7 @@ export const BLOCK_TYPES = [
   // Meta Types
   "persona",
   "framework",
+  "skill",
 ] as const
 
 export type BlockType = (typeof BLOCK_TYPES)[number]
@@ -42,7 +43,7 @@ export interface BlockTypeMetadata {
   /** Default zone when creating blocks of this type */
   defaultZone: Zone
   /** Category for grouping in UI */
-  category: "core" | "document" | "conversation" | "meta"
+  category: "core" | "document" | "conversation" | "meta" | "skill"
   /** Lucide icon name */
   icon: string
   /** Color for the type badge (Tailwind class) */
@@ -156,6 +157,16 @@ export const BLOCK_TYPE_METADATA: Record<BlockType, BlockTypeMetadata> = {
     icon: "Network",
     color: "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300",
   },
+
+  // Skill Types
+  skill: {
+    displayName: "Skill",
+    description: "Agent skill imported from SKILL.md",
+    defaultZone: "STABLE",
+    category: "skill",
+    icon: "Puzzle",
+    color: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
+  },
 }
 
 /**
@@ -167,6 +178,7 @@ export function getBlockTypesByCategory(): Record<string, BlockType[]> {
     document: [],
     conversation: [],
     meta: [],
+    skill: [],
   }
 
   for (const type of BLOCK_TYPES) {
@@ -211,4 +223,5 @@ export const CATEGORY_LABELS: Record<string, string> = {
   document: "Documents",
   conversation: "Conversation",
   meta: "Meta",
+  skill: "Skills",
 }

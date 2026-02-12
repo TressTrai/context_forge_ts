@@ -3,6 +3,15 @@ import { v } from "convex/values"
 import { authTables } from "@convex-dev/auth/server"
 import { zoneValidator } from "./lib/validators"
 
+// Shared validator for skill block metadata (used in blocks, templates, snapshots)
+const skillMetadataValidator = v.object({
+  skillName: v.string(),
+  skillDescription: v.optional(v.string()),
+  sourceType: v.union(v.literal("local"), v.literal("upload"), v.literal("url")),
+  sourceRef: v.optional(v.string()),
+  parentSkillName: v.optional(v.string()), // Links reference blocks to their parent skill
+})
+
 export default defineSchema({
   // Auth tables from Convex Auth
   ...authTables,
@@ -50,6 +59,7 @@ export default defineSchema({
         type: v.string(),
         zone: zoneValidator,
         position: v.number(),
+        metadata: v.optional(skillMetadataValidator),
       })
     ),
     // Workflow linkage (Phase 3)
@@ -114,6 +124,8 @@ export default defineSchema({
     compressedAt: v.optional(v.number()), // Timestamp when compressed
     // Merge tracking (for multi-block compression)
     mergedFromCount: v.optional(v.number()), // Number of blocks that were merged into this one
+    // Skill metadata (for skill blocks)
+    metadata: v.optional(skillMetadataValidator),
   })
     .index("by_zone", ["zone", "position"]) // Legacy index
     .index("by_session", ["sessionId"])
@@ -135,6 +147,7 @@ export default defineSchema({
         tokens: v.optional(v.number()),
         originalTokens: v.optional(v.number()),
         tokenModel: v.optional(v.string()),
+        metadata: v.optional(skillMetadataValidator),
       })
     ),
   }).index("by_session", ["sessionId"]),
