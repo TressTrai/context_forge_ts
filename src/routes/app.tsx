@@ -13,6 +13,7 @@ import { DndProvider } from "@/components/dnd"
 import { SessionProvider, useSession } from "@/contexts/SessionContext"
 import { SaveTemplateDialog, ApplyTemplateDialog } from "@/components/templates"
 import { AddToProjectDialog } from "@/components/projects"
+import { SessionDropdown } from "@/components/sessions/SessionDropdown"
 
 // Simple theme toggle hook
 function useTheme() {
@@ -70,7 +71,7 @@ function AuthRedirect() {
 
 // Session selector component with template actions
 function SessionSelector() {
-  const { sessionId, switchSession, createSession, isLoading } = useSession()
+  const { sessionId, switchSession, createSession, clearSession, isLoading } = useSession()
   const sessions = useQuery(api.sessions.list)
   const [showSaveTemplate, setShowSaveTemplate] = useState(false)
   const [showApplyTemplate, setShowApplyTemplate] = useState(false)
@@ -81,33 +82,30 @@ function SessionSelector() {
     await createSession(name)
   }
 
+  const handleSessionDeleted = (deletedId: Id<"sessions">, remaining: Doc<"sessions">[]) => {
+    if (deletedId === sessionId) {
+      if (remaining.length > 0) {
+        switchSession(remaining[0]._id)
+      } else {
+        clearSession()
+      }
+    }
+  }
+
   if (isLoading || sessions === undefined) {
     return <span className="text-sm text-muted-foreground">Loading...</span>
   }
 
   return (
     <div className="flex items-center gap-2">
-      <select
-        value={sessionId ?? ""}
-        onChange={(e) => {
-          if (e.target.value) {
-            switchSession(e.target.value as Id<"sessions">)
-          }
-        }}
-        className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-      >
-        <option value="" disabled>
-          Select session...
-        </option>
-        {sessions.map((session: Doc<"sessions">) => (
-          <option key={session._id} value={session._id}>
-            {session.name ?? `Session ${session._id.slice(-6)}`}
-          </option>
-        ))}
-      </select>
-      <Button variant="outline" size="sm" onClick={handleCreateSession}>
-        + New
-      </Button>
+      <SessionDropdown
+        sessions={sessions}
+        currentSessionId={sessionId}
+        onSelectSession={switchSession}
+        onCreateSession={handleCreateSession}
+        onSessionDeleted={handleSessionDeleted}
+        isLoading={isLoading}
+      />
 
       {/* Template actions - only show when session is selected */}
       {sessionId && (
