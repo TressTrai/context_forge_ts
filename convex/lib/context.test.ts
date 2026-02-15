@@ -219,6 +219,55 @@ describe("getContextStats", () => {
   })
 })
 
+describe("draft block filtering", () => {
+  it("excludes draft blocks from assembleContext", () => {
+    const blocks = [
+      createBlock({ content: "Active note", zone: "WORKING", position: 0 }),
+      createBlock({ content: "Draft note", zone: "WORKING", position: 1, isDraft: true }),
+    ]
+    const messages = assembleContext(blocks, "Question")
+    const workingMsg = messages.find((m) => m.content.includes("Current Context"))
+    expect(workingMsg?.content).toContain("Active note")
+    expect(workingMsg?.content).not.toContain("Draft note")
+  })
+
+  it("excludes draft system_prompt from extractSystemPromptFromBlocks", () => {
+    const blocks = [
+      createBlock({ content: "Draft prompt", zone: "PERMANENT", type: "system_prompt", position: 0, isDraft: true }),
+      createBlock({ content: "Active prompt", zone: "PERMANENT", type: "system_prompt", position: 1 }),
+    ]
+    expect(extractSystemPromptFromBlocks(blocks)).toBe("Active prompt")
+  })
+
+  it("returns undefined when only draft system_prompt exists", () => {
+    const blocks = [
+      createBlock({ content: "Draft prompt", zone: "PERMANENT", type: "system_prompt", position: 0, isDraft: true }),
+    ]
+    expect(extractSystemPromptFromBlocks(blocks)).toBeUndefined()
+  })
+
+  it("excludes draft blocks from assembleContextWithConversation", () => {
+    const blocks = [
+      createBlock({ content: "Active ref", zone: "STABLE", position: 0 }),
+      createBlock({ content: "Draft ref", zone: "STABLE", position: 1, isDraft: true }),
+    ]
+    const messages = assembleContextWithConversation(blocks, [], "Hello")
+    const refMsg = messages.find((m) => m.content.includes("Reference Material"))
+    expect(refMsg?.content).toContain("Active ref")
+    expect(refMsg?.content).not.toContain("Draft ref")
+  })
+
+  it("excludes draft blocks from getContextStats", () => {
+    const blocks = [
+      createBlock({ content: "ABCD", zone: "PERMANENT", position: 0 }),
+      createBlock({ content: "EFGH", zone: "PERMANENT", position: 1, isDraft: true }),
+    ]
+    const stats = getContextStats(blocks)
+    expect(stats.permanent).toEqual({ count: 1, chars: 4 })
+    expect(stats.total).toEqual({ count: 1, chars: 4 })
+  })
+})
+
 describe("NO_TOOLS_SUFFIX", () => {
   it("contains anti-agent instructions", () => {
     expect(NO_TOOLS_SUFFIX).toContain("do NOT have access to tools")

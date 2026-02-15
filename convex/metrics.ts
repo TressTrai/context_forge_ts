@@ -63,8 +63,11 @@ export const getZoneMetrics = query({
       const tokens = block.tokens ?? countTokens(block.content)
 
       zones[zone].blocks++
-      zones[zone].tokens += tokens
-      totalTokens += tokens
+      // Draft blocks don't count toward token budgets
+      if (!block.isDraft) {
+        zones[zone].tokens += tokens
+        totalTokens += tokens
+      }
     }
 
     // Calculate percentages
@@ -128,7 +131,7 @@ export const checkBudget = query({
       .collect()
 
     const currentTokens = blocks.reduce(
-      (sum, block) => sum + (block.tokens ?? countTokens(block.content)),
+      (sum, block) => block.isDraft ? sum : sum + (block.tokens ?? countTokens(block.content)),
       0
     )
 
@@ -204,6 +207,7 @@ export const getBudgetStatus = query({
     }
 
     for (const block of blocks) {
+      if (block.isDraft) continue
       const tokens = block.tokens ?? countTokens(block.content)
       zoneTotals[block.zone] = (zoneTotals[block.zone] ?? 0) + tokens
     }

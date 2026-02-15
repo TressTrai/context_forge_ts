@@ -205,6 +205,7 @@ function BlockCard({
   zone,
   createdAt,
   tokens,
+  isDraft,
   isCompressed,
   compressionRatio,
   sessionId,
@@ -218,6 +219,7 @@ function BlockCard({
   zone: Zone
   createdAt: number
   tokens?: number
+  isDraft?: boolean
   isCompressed?: boolean
   compressionRatio?: number
   sessionId: Id<"sessions">
@@ -234,6 +236,7 @@ function BlockCard({
   const [showActions, setShowActions] = useState(false)
   const removeBlock = useMutation(api.blocks.remove)
   const moveBlock = useMutation(api.blocks.move)
+  const toggleDraft = useMutation(api.blocks.toggleDraft)
   const { toast } = useToast()
 
   // Delete confirmation
@@ -285,6 +288,11 @@ function BlockCard({
     )
   }
 
+  const handleToggleDraft = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await toggleDraft({ id })
+  }
+
   const typeMeta = getBlockTypeMetadata(type)
   const otherZones = ZONES.filter((z) => z !== zone)
 
@@ -301,7 +309,8 @@ function BlockCard({
     <div
       className={cn(
         "rounded border bg-card p-2 select-none hover:border-border/80 transition-colors",
-        isSelected ? "border-primary bg-primary/5" : "border-border"
+        isSelected ? "border-primary bg-primary/5" : "border-border",
+        isDraft && "opacity-50"
       )}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -320,6 +329,11 @@ function BlockCard({
           <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium", typeMeta.color)}>
             {typeMeta.displayName}
           </span>
+          {isDraft && (
+            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+              Draft
+            </span>
+          )}
           <span className="text-[10px] text-muted-foreground">{formatTimeAgo(createdAt)}</span>
           {tokens && <span className="text-[10px] text-muted-foreground font-mono">{tokens}t</span>}
           {isCompressed && compressionRatio && (
@@ -343,6 +357,7 @@ function BlockCard({
                 {isCompressing ? "..." : "Compress"}
               </DebouncedButton>
             )}
+            <button onClick={handleToggleDraft} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted">{isDraft ? "Undraft" : "Draft"}</button>
             <button onClick={handleCopy} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted">Copy</button>
             <Link
               to="/app/blocks/$blockId"
@@ -555,6 +570,7 @@ function ZoneColumn({
                   zone={block.zone}
                   createdAt={block.createdAt}
                   tokens={block.tokens ?? undefined}
+                  isDraft={block.isDraft}
                   isCompressed={block.isCompressed}
                   compressionRatio={block.compressionRatio}
                   sessionId={sessionId}

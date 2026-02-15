@@ -31,7 +31,7 @@ export function extractSystemPromptFromBlocks(
   blocks: Doc<"blocks">[]
 ): string | undefined {
   const systemPromptBlocks = blocks
-    .filter((b) => b.type === "system_prompt" && b.zone === "PERMANENT")
+    .filter((b) => b.type === "system_prompt" && b.zone === "PERMANENT" && !b.isDraft)
     .sort((a, b) => a.position - b.position)
 
   return systemPromptBlocks[0]?.content
@@ -69,7 +69,7 @@ export function assembleContext(
 
   for (const block of blocks) {
     // Skip system_prompt blocks - caller extracts them via extractSystemPromptFromBlocks()
-    if (block.type === "system_prompt") {
+    if (block.type === "system_prompt" || block.isDraft) {
       continue
     }
     const zone = block.zone as Zone
@@ -146,6 +146,7 @@ export function getContextStats(blocks: Doc<"blocks">[]): {
   }
 
   for (const block of blocks) {
+    if (block.isDraft) continue
     const zone = block.zone.toLowerCase() as "permanent" | "stable" | "working"
     stats[zone].count++
     stats[zone].chars += block.content.length
@@ -186,7 +187,7 @@ export function assembleContextWithConversation(
 
   for (const block of blocks) {
     // Skip system_prompt blocks - caller extracts them via extractSystemPromptFromBlocks()
-    if (block.type === "system_prompt") {
+    if (block.type === "system_prompt" || block.isDraft) {
       continue
     }
     const zone = block.zone as Zone

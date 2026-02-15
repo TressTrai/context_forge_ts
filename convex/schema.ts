@@ -113,6 +113,8 @@ export default defineSchema({
     updatedAt: v.number(),
     // Test data flag - marked records can be bulk deleted
     testData: v.optional(v.boolean()),
+    // Draft flag - draft blocks are visible but excluded from LLM context
+    isDraft: v.optional(v.boolean()),
     // Token tracking
     tokens: v.optional(v.number()), // Current token count
     originalTokens: v.optional(v.number()), // Original token count (before compression)
@@ -148,6 +150,7 @@ export default defineSchema({
         originalTokens: v.optional(v.number()),
         tokenModel: v.optional(v.string()),
         metadata: v.optional(skillMetadataValidator),
+        isDraft: v.optional(v.boolean()),
       })
     ),
   }).index("by_session", ["sessionId"]),

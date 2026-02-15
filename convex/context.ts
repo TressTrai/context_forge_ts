@@ -148,7 +148,10 @@ export const getPreview = query({
       WORKING: { blocks: 0, tokens: 0, content: "" },
     }
 
-    for (const block of blocks) {
+    // Filter out draft blocks — preview should match what the LLM sees
+    const activeBlocks = blocks.filter((b) => !b.isDraft)
+
+    for (const block of activeBlocks) {
       const zone = block.zone as keyof typeof zones
       zones[zone].blocks++
       zones[zone].tokens += block.tokens ?? countTokens(block.content)
@@ -156,9 +159,9 @@ export const getPreview = query({
 
     // Sort and build content for each zone
     const sorted = {
-      PERMANENT: blocks.filter((b) => b.zone === "PERMANENT").sort((a, b) => a.position - b.position),
-      STABLE: blocks.filter((b) => b.zone === "STABLE").sort((a, b) => a.position - b.position),
-      WORKING: blocks.filter((b) => b.zone === "WORKING").sort((a, b) => a.position - b.position),
+      PERMANENT: activeBlocks.filter((b) => b.zone === "PERMANENT").sort((a, b) => a.position - b.position),
+      STABLE: activeBlocks.filter((b) => b.zone === "STABLE").sort((a, b) => a.position - b.position),
+      WORKING: activeBlocks.filter((b) => b.zone === "WORKING").sort((a, b) => a.position - b.position),
     }
 
     zones.PERMANENT.content = sorted.PERMANENT.map((b) => b.content).join("\n\n")
@@ -169,7 +172,7 @@ export const getPreview = query({
 
     return {
       zones,
-      totalBlocks: blocks.length,
+      totalBlocks: activeBlocks.length,
       totalTokens,
     }
   },

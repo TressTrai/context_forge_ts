@@ -71,6 +71,7 @@ export const create = mutation({
       originalTokens: block.originalTokens,
       tokenModel: block.tokenModel,
       metadata: block.metadata,
+      isDraft: block.isDraft,
     }))
 
     return await ctx.db.insert("snapshots", {
@@ -121,6 +122,7 @@ export const restore = mutation({
         originalTokens: blockData.originalTokens,
         tokenModel: blockData.tokenModel,
         metadata: blockData.metadata,
+        isDraft: blockData.isDraft,
       })
     }
 

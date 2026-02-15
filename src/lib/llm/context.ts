@@ -32,6 +32,7 @@ export interface Block {
   type: string
   zone: Zone | string
   position: number
+  isDraft?: boolean
 }
 
 /**
@@ -42,7 +43,7 @@ export interface Block {
  */
 export function extractSystemPromptFromBlocks(blocks: Block[]): string | undefined {
   const systemPromptBlocks = blocks
-    .filter((b) => b.type === "system_prompt" && b.zone === "PERMANENT")
+    .filter((b) => b.type === "system_prompt" && b.zone === "PERMANENT" && !b.isDraft)
     .sort((a, b) => a.position - b.position)
 
   return systemPromptBlocks[0]?.content
@@ -70,7 +71,7 @@ export function assembleContext(blocks: Block[], userPrompt: string): ContextMes
   }
 
   for (const block of blocks) {
-    if (block.type === "system_prompt") {
+    if (block.type === "system_prompt" || block.isDraft) {
       continue
     }
     const zone = block.zone as Zone
@@ -143,7 +144,7 @@ export function assembleContextWithConversation(
   }
 
   for (const block of blocks) {
-    if (block.type === "system_prompt") {
+    if (block.type === "system_prompt" || block.isDraft) {
       continue
     }
     const zone = block.zone as Zone
@@ -227,6 +228,7 @@ export function getContextStats(blocks: Block[]): {
   }
 
   for (const block of blocks) {
+    if (block.isDraft) continue
     const zone = (block.zone as string).toLowerCase() as "permanent" | "stable" | "working"
     if (stats[zone]) {
       stats[zone].count++

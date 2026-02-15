@@ -304,6 +304,26 @@ export const remove = mutation({
   },
 })
 
+// Toggle draft status on a block
+export const toggleDraft = mutation({
+  args: { id: v.id("blocks") },
+  handler: async (ctx, args) => {
+    const block = await ctx.db.get(args.id)
+    if (!block) throw new Error("Block not found")
+
+    await requireSessionAccess(ctx, block.sessionId)
+
+    const now = Date.now()
+    await ctx.db.patch(args.id, {
+      isDraft: block.isDraft ? undefined : true,
+      updatedAt: now,
+    })
+    await ctx.db.patch(block.sessionId, { updatedAt: now })
+
+    return args.id
+  },
+})
+
 // ============ Compression mutations ============
 
 /**
