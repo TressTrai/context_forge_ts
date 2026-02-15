@@ -8,6 +8,8 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import type { Id, Doc } from "../../../convex/_generated/dataModel"
+import { PublishDialog } from "@/components/marketplace/PublishDialog"
+import { useToast } from "@/components/ui/toast"
 
 // Format relative time
 function formatTimeAgo(timestamp: number): string {
@@ -196,11 +198,15 @@ function WorkflowCard({
   onStart,
   onDelete,
   onClone,
+  onPublish,
+  onUnpublish,
 }: {
   workflow: Doc<"workflows">
   onStart: () => void
   onDelete: () => void
   onClone: () => void
+  onPublish: () => void
+  onUnpublish: () => void
 }) {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -312,6 +318,23 @@ function WorkflowCard({
             Delete
           </Button>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          {workflow.publishedMarketplaceId ? (
+            <>
+              <span className="text-xs text-green-600 dark:text-green-400 font-medium">Published</span>
+              <Button variant="ghost" size="sm" onClick={onPublish} className="text-xs h-7">
+                Update
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onUnpublish} className="text-xs h-7 text-destructive hover:text-destructive">
+                Unpublish
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={onPublish} className="text-xs h-7">
+              Publish
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -322,10 +345,23 @@ function WorkflowsIndexPage() {
   const workflows = useQuery(api.workflows.list)
   const removeWorkflow = useMutation(api.workflows.remove)
   const cloneWorkflow = useMutation(api.workflows.clone)
+  const unpublish = useMutation(api.marketplace.unpublish)
   const navigate = useNavigate()
+  const { toast } = useToast()
 
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [startingWorkflow, setStartingWorkflow] = useState<Doc<"workflows"> | null>(null)
+  const [publishingWorkflow, setPublishingWorkflow] = useState<Doc<"workflows"> | null>(null)
+
+  const handleUnpublish = async (workflow: Doc<"workflows">) => {
+    if (!workflow.publishedMarketplaceId) return
+    try {
+      await unpublish({ id: workflow.publishedMarketplaceId })
+      toast.success("Unpublished", `"${workflow.name}" removed from marketplace`)
+    } catch (err) {
+      toast.error("Error", String(err))
+    }
+  }
 
   const handleDelete = async (id: Id<"workflows">) => {
     await removeWorkflow({ id })
@@ -377,6 +413,8 @@ function WorkflowsIndexPage() {
               onStart={() => setStartingWorkflow(workflow)}
               onDelete={() => handleDelete(workflow._id)}
               onClone={() => handleClone(workflow)}
+              onPublish={() => setPublishingWorkflow(workflow)}
+              onUnpublish={() => handleUnpublish(workflow)}
             />
           ))}
         </div>
@@ -393,6 +431,18 @@ function WorkflowsIndexPage() {
           isOpen={true}
           onClose={() => setStartingWorkflow(null)}
           onStarted={handleStarted}
+        />
+      )}
+
+      {publishingWorkflow && (
+        <PublishDialog
+          isOpen={true}
+          onClose={() => setPublishingWorkflow(null)}
+          type="workflow"
+          sourceId={publishingWorkflow._id}
+          sourceName={publishingWorkflow.name}
+          sourceDescription={publishingWorkflow.description}
+          publishedMarketplaceId={publishingWorkflow.publishedMarketplaceId}
         />
       )}
     </div>

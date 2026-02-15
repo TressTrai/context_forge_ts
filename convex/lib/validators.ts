@@ -20,6 +20,12 @@ export const zoneValidator = v.union(
 
 export type Zone = "PERMANENT" | "STABLE" | "WORKING"
 
+export const marketplaceTypeValidator = v.union(
+  v.literal("template"),
+  v.literal("workflow")
+)
+export type MarketplaceType = "template" | "workflow"
+
 /**
  * Block type validator for the 12 rationalized block types.
  *

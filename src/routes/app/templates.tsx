@@ -8,6 +8,8 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import type { Id, Doc } from "../../../convex/_generated/dataModel"
+import { PublishDialog } from "@/components/marketplace/PublishDialog"
+import { useToast } from "@/components/ui/toast"
 
 // Format relative time
 function formatTimeAgo(timestamp: number): string {
@@ -24,10 +26,14 @@ function TemplateCard({
   template,
   onDelete,
   onEdit,
+  onPublish,
+  onUnpublish,
 }: {
   template: Doc<"templates">
   onDelete: () => void
   onEdit: () => void
+  onPublish: () => void
+  onUnpublish: () => void
 }) {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -142,6 +148,23 @@ function TemplateCard({
             Delete
           </Button>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          {template.publishedMarketplaceId ? (
+            <>
+              <span className="text-xs text-green-600 dark:text-green-400 font-medium">Published</span>
+              <Button variant="ghost" size="sm" onClick={onPublish} className="text-xs h-7">
+                Update
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onUnpublish} className="text-xs h-7 text-destructive hover:text-destructive">
+                Unpublish
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={onPublish} className="text-xs h-7">
+              Publish
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -233,7 +256,20 @@ function EditTemplateDialog({
 function TemplatesPage() {
   const templates = useQuery(api.templates.list)
   const removeTemplate = useMutation(api.templates.remove)
+  const unpublish = useMutation(api.marketplace.unpublish)
+  const { toast } = useToast()
   const [editingTemplate, setEditingTemplate] = useState<Doc<"templates"> | null>(null)
+  const [publishingTemplate, setPublishingTemplate] = useState<Doc<"templates"> | null>(null)
+
+  const handleUnpublish = async (template: Doc<"templates">) => {
+    if (!template.publishedMarketplaceId) return
+    try {
+      await unpublish({ id: template.publishedMarketplaceId })
+      toast.success("Unpublished", `"${template.name}" removed from marketplace`)
+    } catch (err) {
+      toast.error("Error", String(err))
+    }
+  }
 
   const handleDelete = async (id: Id<"templates">) => {
     await removeTemplate({ id })
@@ -268,6 +304,8 @@ function TemplatesPage() {
               template={template}
               onDelete={() => handleDelete(template._id)}
               onEdit={() => setEditingTemplate(template)}
+              onPublish={() => setPublishingTemplate(template)}
+              onUnpublish={() => handleUnpublish(template)}
             />
           ))}
         </div>
@@ -278,6 +316,18 @@ function TemplatesPage() {
           template={editingTemplate}
           isOpen={true}
           onClose={() => setEditingTemplate(null)}
+        />
+      )}
+
+      {publishingTemplate && (
+        <PublishDialog
+          isOpen={true}
+          onClose={() => setPublishingTemplate(null)}
+          type="template"
+          sourceId={publishingTemplate._id}
+          sourceName={publishingTemplate.name}
+          sourceDescription={publishingTemplate.description}
+          publishedMarketplaceId={publishingTemplate.publishedMarketplaceId}
         />
       )}
     </div>

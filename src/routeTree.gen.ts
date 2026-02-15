@@ -17,6 +17,7 @@ import { Route as AppWorkflowsRouteImport } from './routes/app/workflows'
 import { Route as AppTemplatesRouteImport } from './routes/app/templates'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
 import { Route as AppProjectsRouteImport } from './routes/app/projects'
+import { Route as AppMarketplaceRouteImport } from './routes/app/marketplace'
 import { Route as AppWorkflowsIndexRouteImport } from './routes/app/workflows.index'
 import { Route as AppProjectsIndexRouteImport } from './routes/app/projects.index'
 import { Route as AppWorkflowsWorkflowIdRouteImport } from './routes/app/workflows.$workflowId'
@@ -63,6 +64,11 @@ const AppProjectsRoute = AppProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMarketplaceRoute = AppMarketplaceRouteImport.update({
+  id: '/marketplace',
+  path: '/marketplace',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppWorkflowsIndexRoute = AppWorkflowsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/marketplace': typeof AppMarketplaceRoute
   '/app/projects': typeof AppProjectsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/templates': typeof AppTemplatesRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/app/marketplace': typeof AppMarketplaceRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/templates': typeof AppTemplatesRoute
   '/app': typeof AppIndexRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/app/marketplace': typeof AppMarketplaceRoute
   '/app/projects': typeof AppProjectsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/templates': typeof AppTemplatesRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/marketplace'
     | '/app/projects'
     | '/app/settings'
     | '/app/templates'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/app/marketplace'
     | '/app/settings'
     | '/app/templates'
     | '/app'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/app/marketplace'
     | '/app/projects'
     | '/app/settings'
     | '/app/templates'
@@ -241,6 +253,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/marketplace': {
+      id: '/app/marketplace'
+      path: '/marketplace'
+      fullPath: '/app/marketplace'
+      preLoaderRoute: typeof AppMarketplaceRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/workflows/': {
       id: '/app/workflows/'
       path: '/'
@@ -308,6 +327,7 @@ const AppWorkflowsRouteWithChildren = AppWorkflowsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppMarketplaceRoute: typeof AppMarketplaceRoute
   AppProjectsRoute: typeof AppProjectsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppTemplatesRoute: typeof AppTemplatesRoute
@@ -317,6 +337,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppMarketplaceRoute: AppMarketplaceRoute,
   AppProjectsRoute: AppProjectsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppTemplatesRoute: AppTemplatesRoute,

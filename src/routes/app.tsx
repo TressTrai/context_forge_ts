@@ -224,6 +224,7 @@ function Header({ rightContent }: { rightContent: React.ReactNode }) {
             <NavLink to="/app/templates">Templates</NavLink>
             <NavLink to="/app/projects">Projects</NavLink>
             <NavLink to="/app/workflows">Workflows</NavLink>
+            <NavLink to="/app/marketplace">Marketplace</NavLink>
             <NavLink to="/app/settings">Settings</NavLink>
           </nav>
         </div>

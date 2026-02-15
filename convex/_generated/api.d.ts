@@ -24,6 +24,7 @@ import type * as lib_featureFlags from "../lib/featureFlags.js";
 import type * as lib_langfuse from "../lib/langfuse.js";
 import type * as lib_tokenizer from "../lib/tokenizer.js";
 import type * as lib_validators from "../lib/validators.js";
+import type * as marketplace from "../marketplace.js";
 import type * as metrics from "../metrics.js";
 import type * as projects from "../projects.js";
 import type * as sessions from "../sessions.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/langfuse": typeof lib_langfuse;
   "lib/tokenizer": typeof lib_tokenizer;
   "lib/validators": typeof lib_validators;
+  marketplace: typeof marketplace;
   metrics: typeof metrics;
   projects: typeof projects;
   sessions: typeof sessions;

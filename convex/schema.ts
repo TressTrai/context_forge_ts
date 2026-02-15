@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 import { authTables } from "@convex-dev/auth/server"
-import { zoneValidator } from "./lib/validators"
+import { zoneValidator, marketplaceTypeValidator } from "./lib/validators"
 
 // Shared validator for skill block metadata (used in blocks, templates, snapshots)
 const skillMetadataValidator = v.object({
@@ -67,6 +67,8 @@ export default defineSchema({
     stepOrder: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    publishedMarketplaceId: v.optional(v.id("marketplace")),
+    sourceMarketplaceId: v.optional(v.id("marketplace")),
   })
     .index("by_workflow", ["workflowId", "stepOrder"])
     .index("by_user", ["userId"]),
@@ -100,6 +102,8 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
+    publishedMarketplaceId: v.optional(v.id("marketplace")),
+    sourceMarketplaceId: v.optional(v.id("marketplace")),
   }).index("by_user", ["userId"]),
 
   // Core blocks table - content blocks within sessions
@@ -176,4 +180,63 @@ export default defineSchema({
     costUsd: v.optional(v.number()),
     durationMs: v.optional(v.number()),
   }).index("by_session", ["sessionId", "createdAt"]),
+
+  // Marketplace - community template/workflow library
+  marketplace: defineTable({
+    authorId: v.id("users"),
+    authorName: v.string(),
+    type: marketplaceTypeValidator,
+    name: v.string(),
+    description: v.string(),
+    category: v.string(),
+
+    // Content snapshot (copied on publish, self-contained)
+    templateBlocks: v.optional(v.array(v.object({
+      content: v.string(),
+      type: v.string(),
+      zone: zoneValidator,
+      position: v.number(),
+      metadata: v.optional(skillMetadataValidator),
+    }))),
+    workflowSteps: v.optional(v.array(v.object({
+      name: v.string(),
+      description: v.optional(v.string()),
+      carryForwardZones: v.optional(v.array(v.union(
+        v.literal("PERMANENT"), v.literal("STABLE"), v.literal("WORKING")
+      ))),
+    }))),
+    importCount: v.number(),
+    searchText: v.string(),
+    publishedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .searchIndex("search_marketplace", {
+      searchField: "searchText",
+      filterFields: ["type", "category"],
+    })
+    .index("by_author", ["authorId"])
+    .index("by_category", ["category", "importCount"]),
+
+  // Marketplace categories - admin-managed
+  marketplaceCategories: defineTable({
+    slug: v.string(),
+    label: v.string(),
+    position: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_position", ["position"]),
+
+  // Marketplace blocks - template blocks stored per step (avoids 1 MiB doc limit)
+  marketplaceBlocks: defineTable({
+    marketplaceId: v.id("marketplace"),
+    stepIndex: v.number(),
+    blocks: v.array(v.object({
+      content: v.string(),
+      type: v.string(),
+      zone: zoneValidator,
+      position: v.number(),
+      metadata: v.optional(skillMetadataValidator),
+    })),
+  })
+    .index("by_marketplace", ["marketplaceId"]),
 })
