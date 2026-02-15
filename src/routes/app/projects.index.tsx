@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
@@ -29,27 +29,47 @@ function CreateProjectDialog({
 }) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
 
   const createProject = useMutation(api.projects.create)
+  const startProject = useMutation(api.workflows.startProject)
+  const workflows = useQuery(api.workflows.list)
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     try {
-      await createProject({
-        name: name.trim(),
-        description: description.trim() || undefined,
-      })
-      setName("")
-      setDescription("")
-      onClose()
+      if (selectedWorkflowId) {
+        const result = await startProject({
+          workflowId: selectedWorkflowId as Id<"workflows">,
+          projectName: name.trim(),
+          projectDescription: description.trim() || undefined,
+        })
+        setName("")
+        setDescription("")
+        setSelectedWorkflowId("")
+        onClose()
+        navigate({ to: "/app/projects/$projectId", params: { projectId: result.projectId } })
+      } else {
+        await createProject({
+          name: name.trim(),
+          description: description.trim() || undefined,
+        })
+        setName("")
+        setDescription("")
+        setSelectedWorkflowId("")
+        onClose()
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   if (!isOpen) return null
+
+  const availableWorkflows = workflows?.filter((w) => w.steps.length > 0) ?? []
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -86,12 +106,38 @@ function CreateProjectDialog({
             />
           </div>
 
+          {availableWorkflows.length > 0 && (
+            <div>
+              <label htmlFor="project-workflow" className="block text-sm font-medium mb-1">
+                Workflow (optional)
+              </label>
+              <select
+                id="project-workflow"
+                value={selectedWorkflowId}
+                onChange={(e) => setSelectedWorkflowId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">No workflow — blank project</option>
+                {availableWorkflows.map((w) => (
+                  <option key={w._id} value={w._id}>
+                    {w.name} ({w.steps.length} step{w.steps.length !== 1 ? "s" : ""})
+                  </option>
+                ))}
+              </select>
+              {selectedWorkflowId && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Project will start at step 1 of the selected workflow.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!name.trim() || isLoading}>
-              {isLoading ? "Creating..." : "Create Project"}
+              {isLoading ? "Creating..." : selectedWorkflowId ? "Start Workflow" : "Create Project"}
             </Button>
           </div>
         </form>
