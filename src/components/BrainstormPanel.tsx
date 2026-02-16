@@ -201,6 +201,8 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
           disableAgentBehavior={brainstorm.disableAgentBehavior}
           onDisableAgentBehaviorChange={brainstorm.setDisableAgentBehavior}
           onStopStreaming={brainstorm.stopStreaming}
+          activeSkills={brainstorm.activeSkills}
+          onToggleSkill={brainstorm.toggleSkill}
         />
       </>
     )

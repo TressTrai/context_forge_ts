@@ -159,22 +159,25 @@ export function getContextStats(blocks: Doc<"blocks">[]): {
 
 /**
  * Assemble blocks and conversation history into messages for brainstorming.
- * Order: PERMANENT → STABLE → WORKING → Conversation history → New message
+ * Order: PERMANENT → STABLE → WORKING → Active Skills → Conversation history → New message
  *
  * IMPORTANT: This function does NOT include system_prompt blocks in output.
  * Callers should use extractSystemPromptFromBlocks() separately and pass
  * the system prompt to the provider via provider-specific options.
  *
- * This preserves context blocks as prefix and appends the ongoing conversation.
+ * Active skills are injected after WORKING to preserve prompt caching
+ * (toggling a skill only invalidates the conversation suffix).
  *
  * @param blocks - All blocks for the session
  * @param conversationHistory - Previous messages in the conversation
  * @param newMessage - The new user message
+ * @param activeSkillsContent - Optional formatted skill text to inject
  */
 export function assembleContextWithConversation(
   blocks: Doc<"blocks">[],
   conversationHistory: ConversationMessage[],
-  newMessage: string
+  newMessage: string,
+  activeSkillsContent?: string
 ): ContextMessage[] {
   const messages: ContextMessage[] = []
 
@@ -228,7 +231,15 @@ export function assembleContextWithConversation(
     })
   }
 
-  // 4. Conversation history (alternating user/assistant messages)
+  // 4. Active skills (after WORKING, before conversation — cache-friendly)
+  if (activeSkillsContent) {
+    messages.push({
+      role: "user",
+      content: `Active Skills:\n\n${activeSkillsContent}`,
+    })
+  }
+
+  // 5. Conversation history (alternating user/assistant messages)
   for (const msg of conversationHistory) {
     messages.push({
       role: msg.role,
@@ -236,7 +247,7 @@ export function assembleContextWithConversation(
     })
   }
 
-  // 5. New user message (always last)
+  // 6. New user message (always last)
   messages.push({
     role: "user",
     content: newMessage,

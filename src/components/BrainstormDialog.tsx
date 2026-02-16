@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { Message, Provider, Zone } from "@/hooks/useBrainstorm"
+import { SKILLS } from "@/lib/llm/skills"
 import ReactMarkdown from 'react-markdown'
 import gfm from 'remark-gfm'
 import { MarkdownComponents } from '@/components/MarkdownComponents';
@@ -44,6 +45,9 @@ interface BrainstormDialogProps {
   onDisableAgentBehaviorChange?: (value: boolean) => void
   // Stop streaming
   onStopStreaming: () => void
+  // Ephemeral skills
+  activeSkills?: Record<string, boolean>
+  onToggleSkill?: (skillId: string) => void
 }
 
 // Message bubble component
@@ -255,9 +259,12 @@ export function BrainstormDialog({
   disableAgentBehavior = true,
   onDisableAgentBehaviorChange,
   onStopStreaming,
+  activeSkills,
+  onToggleSkill,
 }: BrainstormDialogProps) {
   const [inputValue, setInputValue] = useState("")
   const [showCloseWarning, setShowCloseWarning] = useState(false)
+  const [expandedSkill, setExpandedSkill] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -428,6 +435,35 @@ export function BrainstormDialog({
                 System Prompt Active
               </span>
             )}
+            {/* Active skills chips */}
+            {activeSkills && onToggleSkill && Object.entries(activeSkills).map(([skillId, enabled]) => {
+              const skill = SKILLS[skillId]
+              if (!skill) return null
+              return (
+                <span
+                  key={skillId}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full cursor-pointer transition-colors",
+                    enabled
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                      : "bg-muted text-muted-foreground line-through"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={() => onToggleSkill(skillId)}
+                    className="rounded border-input h-3 w-3"
+                  />
+                  <span
+                    onClick={() => setExpandedSkill(expandedSkill === skillId ? null : skillId)}
+                    title="Click to preview skill content"
+                  >
+                    {skill.label}
+                  </span>
+                </span>
+              )
+            })}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -448,6 +484,28 @@ export function BrainstormDialog({
             </Button>
           </div>
         </div>
+
+        {/* Expanded skill preview */}
+        {expandedSkill && SKILLS[expandedSkill] && (
+          <div className="mx-4 mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 max-h-[200px] overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                {SKILLS[expandedSkill].label}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-1 text-xs"
+                onClick={() => setExpandedSkill(null)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+              {SKILLS[expandedSkill].content}
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div

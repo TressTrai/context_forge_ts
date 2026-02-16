@@ -2,6 +2,7 @@
 
 **Date:** 2026-02-16
 **Status:** Approved
+**Skill source:** https://github.com/obra/superpowers/blob/main/skills/brainstorming/SKILL.md
 
 ## Problem
 

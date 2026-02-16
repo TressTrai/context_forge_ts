@@ -23,6 +23,7 @@ import {
   extractSystemPromptFromBlocks,
   NO_TOOLS_SUFFIX,
 } from "./lib/context"
+import { getActiveSkillsContent } from "./lib/skills"
 import { createGeneration, flushLangfuse } from "./lib/langfuse"
 import { isClaudeCodeEnabled } from "./lib/featureFlags"
 
@@ -540,6 +541,7 @@ export const streamBrainstormMessage = action({
     newMessage: v.string(),
     throttleMs: v.optional(v.number()),
     disableAgentBehavior: v.optional(v.boolean()), // Append anti-agent suffix
+    activeSkillIds: v.optional(v.array(v.string())), // Ephemeral skill IDs to inject
   },
   handler: async (ctx, args): Promise<void> => {
     const throttleMs = args.throttleMs ?? 100
@@ -559,11 +561,17 @@ export const streamBrainstormMessage = action({
       systemPrompt = (systemPrompt ?? "") + NO_TOOLS_SUFFIX
     }
 
+    // Build active skills content for injection
+    const activeSkillsContent = args.activeSkillIds?.length
+      ? getActiveSkillsContent(args.activeSkillIds)
+      : undefined
+
     // Assemble context with conversation history (excludes system_prompt blocks)
     const messages = assembleContextWithConversation(
       blocks,
       args.conversationHistory,
-      args.newMessage
+      args.newMessage,
+      activeSkillsContent
     )
     const prompt = formatMessagesAsPrompt(messages)
 

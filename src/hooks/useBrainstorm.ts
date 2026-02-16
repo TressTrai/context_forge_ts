@@ -9,6 +9,7 @@ import {
   extractSystemPromptFromBlocks,
   NO_TOOLS_SUFFIX,
 } from "@/lib/llm/context"
+import { DEFAULT_ACTIVE_SKILLS, getActiveSkillsContent } from "@/lib/llm/skills"
 
 export type Provider = "ollama" | "claude" | "openrouter"
 export type Zone = "PERMANENT" | "STABLE" | "WORKING"
@@ -56,6 +57,10 @@ interface UseBrainstormResult {
   disableAgentBehavior: boolean
   setDisableAgentBehavior: (value: boolean) => void
 
+  // Ephemeral skills
+  activeSkills: Record<string, boolean>
+  toggleSkill: (skillId: string) => void
+
   // State
   error: string | null
 }
@@ -84,6 +89,11 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
   // Conversation state (ephemeral - lost on close/refresh)
   const [messages, setMessages] = useState<Message[]>([])
   const [hasUnsavedContent, setHasUnsavedContent] = useState(false)
+
+  // Ephemeral skills (reset on dialog close)
+  const [activeSkills, setActiveSkills] = useState<Record<string, boolean>>(
+    () => ({ ...DEFAULT_ACTIVE_SKILLS })
+  )
 
   // Streaming state
   const [generationId, setGenerationId] = useState<Id<"generations"> | null>(null)
@@ -234,6 +244,11 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     prevTextRef.current = ""
   }, [generationId, cancelGeneration])
 
+  // Toggle an ephemeral skill on/off
+  const toggleSkill = useCallback((skillId: string) => {
+    setActiveSkills((prev) => ({ ...prev, [skillId]: !prev[skillId] }))
+  }, [])
+
   // Clear conversation
   const clearConversation = useCallback(() => {
     setMessages([])
@@ -253,8 +268,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         throw new Error("Blocks not loaded yet")
       }
 
-      // Assemble context with blocks and conversation
-      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content)
+      // Assemble context with blocks, conversation, and active skills
+      const skillsContent = getActiveSkillsContent(activeSkills)
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined)
 
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
@@ -308,7 +324,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setStreamingText("")
       }
     },
-    [blocks]
+    [blocks, activeSkills]
   )
 
   // Send message via OpenRouter (client-side streaming)
@@ -318,8 +334,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         throw new Error("Blocks not loaded yet")
       }
 
-      // Assemble context with blocks and conversation
-      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content)
+      // Assemble context with blocks, conversation, and active skills
+      const skillsContent = getActiveSkillsContent(activeSkills)
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined)
 
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
@@ -373,7 +390,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setStreamingText("")
       }
     },
-    [blocks]
+    [blocks, activeSkills]
   )
 
   // Send message via Claude (Convex mutations - backend)
@@ -384,15 +401,21 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         content: msg.content,
       }))
 
+      // Collect active skill IDs to pass to backend
+      const activeSkillIds = Object.entries(activeSkills)
+        .filter(([, enabled]) => enabled)
+        .map(([id]) => id)
+
       const result = await startBrainstormGeneration({
         sessionId,
         conversationHistory,
         newMessage: content,
         disableAgentBehavior,
+        activeSkillIds,
       })
       setGenerationId(result.generationId)
     },
-    [sessionId, messages, startBrainstormGeneration, disableAgentBehavior]
+    [sessionId, messages, startBrainstormGeneration, disableAgentBehavior, activeSkills]
   )
 
   // Send a new message (dispatches to correct provider)
@@ -636,6 +659,10 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     // Claude Code agent behavior toggle
     disableAgentBehavior,
     setDisableAgentBehavior,
+
+    // Ephemeral skills
+    activeSkills,
+    toggleSkill,
 
     // Error
     error,
