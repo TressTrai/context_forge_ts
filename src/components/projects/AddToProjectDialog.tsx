@@ -69,7 +69,7 @@ export function AddToProjectDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6 mt-auto">
         <h2 className="text-lg font-semibold mb-4">Add Session to Project</h2>
 
         {currentProjectId && (

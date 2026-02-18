@@ -234,6 +234,7 @@ function BlockCard({
   }
 }) {
   const [showActions, setShowActions] = useState(false)
+  const [copied, setCopied] = useState(false)
   const removeBlock = useMutation(api.blocks.remove)
   const moveBlock = useMutation(api.blocks.move)
   const toggleDraft = useMutation(api.blocks.toggleDraft)
@@ -277,7 +278,25 @@ function BlockCard({
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    await navigator.clipboard.writeText(content)
+    if (!navigator.clipboard) {
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    } else {
+      await navigator.clipboard.writeText(content);
+      }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   const handleCompress = async (e: React.MouseEvent) => {
@@ -359,7 +378,15 @@ function BlockCard({
               </DebouncedButton>
             )}
             <button onClick={handleToggleDraft} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted">{isDraft ? "Undraft" : "Draft"}</button>
-            <button onClick={handleCopy} className="px-1.5 py-0.5 text-[10px] rounded hover:bg-muted">Copy</button>
+            <button 
+              onClick={handleCopy} 
+              className={cn(
+                "px-1.5 py-0.5 text-[10px] rounded transition-colors",
+                copied && "bg-emerald-300/20 text-emerald-600 dark:text-emerald-400"
+              )}
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
             <Link
               to="/app/blocks/$blockId"
               params={{ blockId: id }}

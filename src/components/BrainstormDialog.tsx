@@ -72,13 +72,30 @@ function MessageBubble({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
-
+  
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content)
+    if (!navigator.clipboard) {
+      const textArea = document.createElement('textarea');
+      textArea.value = message.content;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    } else {
+      navigator.clipboard.writeText(message.content);
+      }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
     onCopy()
   }
+
 
   const handleEdit = () => {
     if (editContent.trim() && editContent !== message.content) {

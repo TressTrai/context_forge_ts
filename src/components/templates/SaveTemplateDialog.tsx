@@ -84,7 +84,7 @@ export function SaveTemplateDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6 mt-auto">
         <h2 className="text-lg font-semibold mb-4">Save as Template</h2>
         <p className="text-sm text-muted-foreground mb-4">
           Create a new template or overwrite an existing one with the current session's blocks.
