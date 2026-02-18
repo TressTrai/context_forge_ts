@@ -37,6 +37,8 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [pendingType, setPendingType] = useState<string>("note")
+  const [isSavingType, setIsSavingType] = useState(false)
   const blockTypesByCategory = useMemo(() => getBlockTypesByCategory(), [])
 
   // Initialize form when block loads
@@ -45,22 +47,50 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
       setContent(block.content)
       const normalizedType = block.type.toLowerCase()
       setType(isValidBlockType(normalizedType) ? normalizedType : "note")
+      setPendingType(normalizedType)
       setIsDirty(false)
-      setIsEditing(false)
     }
-  }, [block])
+  }, [block?._id])
+
+  // Update only the "type" field when backend type changes
+  useEffect(() => {
+  if (block) {
+    const normalizedType = block.type.toLowerCase()
+    if (normalizedType !== type) {
+      setType(normalizedType)
+      setPendingType(normalizedType)
+    }
+  }
+}, [block?.type])
 
   // Handle content change
   const handleContentChange = (value: string) => {
     setContent(value)
-    setIsDirty(value !== block?.content || type !== block?.type)
+    setIsDirty(value !== block?.content)
   }
 
   // Handle type change
-  const handleTypeChange = (value: string) => {
-    setType(value)
-    setIsDirty(content !== block?.content || value !== block?.type)
+  const handleTypeChange = async (value: string) => {
+    if (!block || value === block.type) return
+    
+    setPendingType(value)
+    setIsSavingType(true)
+    
+    try {
+      await updateBlock({
+        id: blockId,
+        type: value,
+      })
+      setType(value)
+      setPendingType(value)
+    } catch (error) {
+      console.error('Error save type:', error)
+      setPendingType(type)
+    } finally {
+      setIsSavingType(false)
+    }
   }
+
 
   // Save changes
   const handleSave = async () => {
@@ -70,8 +100,8 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
     try {
       await updateBlock({
         id: blockId,
-        content,
-        type,
+        content: content,
+        type: type,
       })
       setIsDirty(false)
       setIsEditing(false)
@@ -84,6 +114,7 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
   const handleCancel = () => {
     if (isEditing) {
       setContent(block?.content || "")
+      setPendingType(type)
       setIsEditing(false)
       setIsDirty(false)
     } else {
@@ -214,8 +245,9 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
           </label>
           <select
             id="edit-block-type"
-            value={type}
+            value={pendingType}
             onChange={(e) => handleTypeChange(e.target.value)}
+            disabled={isSavingType}
             className="w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             {Object.entries(blockTypesByCategory).map(([category, types]) => (
@@ -228,6 +260,9 @@ function BlockEditor({ blockId }: { blockId: Id<"blocks"> }) {
               </optgroup>
             ))}
           </select>
+          {isSavingType && (
+            <span className="text-xs text-muted-foreground animate-pulse">⟲</span>
+          )}
         </div>
 
         {/* Content display/edit */}
