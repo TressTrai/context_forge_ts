@@ -370,6 +370,9 @@ export const streamGenerateWithContext = action({
     // AbortController for SDK process termination
     const abortController = new AbortController()
 
+    // Capture stderr from Claude Code process for debugging
+    const stderrChunks: string[] = []
+
     // Helper to check if generation was cancelled via DB flag
     const isCancelled = async (): Promise<boolean> => {
       const gen = await ctx.runQuery(internal.generations.getInternal, {
@@ -402,6 +405,9 @@ export const streamGenerateWithContext = action({
           systemPrompt, // Pass system prompt from blocks to provider
           pathToClaudeCodeExecutable: getClaudeCodePath(),
           includePartialMessages: true, // Enable streaming deltas
+          stderr: (data: string) => {
+            stderrChunks.push(data)
+          },
         },
       })) {
         const msgType = (message as Record<string, unknown>).type as string
@@ -446,7 +452,7 @@ export const streamGenerateWithContext = action({
           }
         }
 
-        // Capture usage stats from result message
+        // Capture usage stats and errors from result message
         if (msgType === "result") {
           const msg = message as Record<string, unknown>
           const usage = msg.usage as Record<string, unknown> | undefined
@@ -455,6 +461,14 @@ export const streamGenerateWithContext = action({
             outputTokens = usage.output_tokens as number | undefined
           }
           costUsd = msg.total_cost_usd as number | undefined
+
+          // Log SDK-level execution errors
+          if (msg.subtype === "error_during_execution") {
+            const errors = msg.errors as string[] | undefined
+            if (errors?.length) {
+              console.error(`[Claude Stream] SDK execution errors: ${errors.join("; ")}`)
+            }
+          }
         }
       }
 
@@ -502,19 +516,26 @@ export const streamGenerateWithContext = action({
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error)
+      const stderrOutput = stderrChunks.join("").trim()
       console.error(`[Claude Stream] Error: ${errorMessage}`)
+      if (stderrOutput) {
+        console.error(`[Claude Stream] stderr: ${stderrOutput}`)
+      }
 
       // Flush any partial content
       await flushBuffer()
 
-      // Mark as failed
+      // Mark as failed — include stderr in error for visibility
+      const fullError = stderrOutput
+        ? `Claude Code error: ${errorMessage}\nstderr: ${stderrOutput}`
+        : `Claude Code error: ${errorMessage}`
       await ctx.runMutation(internal.generations.fail, {
         generationId: args.generationId,
-        error: `Claude Code error: ${errorMessage}`,
+        error: fullError,
       })
 
       // Record error in LangFuse
-      trace.error(errorMessage)
+      trace.error(fullError)
       await flushLangfuse()
     }
   },
@@ -602,6 +623,9 @@ export const streamBrainstormMessage = action({
     // AbortController for SDK process termination
     const abortController = new AbortController()
 
+    // Capture stderr from Claude Code process for debugging
+    const stderrChunks: string[] = []
+
     // Helper to check if generation was cancelled via DB flag
     const isCancelled = async (): Promise<boolean> => {
       const gen = await ctx.runQuery(internal.generations.getInternal, {
@@ -634,6 +658,9 @@ export const streamBrainstormMessage = action({
           systemPrompt, // Pass system prompt from blocks to provider
           pathToClaudeCodeExecutable: getClaudeCodePath(),
           includePartialMessages: true, // Enable streaming deltas
+          stderr: (data: string) => {
+            stderrChunks.push(data)
+          },
         },
       })) {
         const msgType = (message as Record<string, unknown>).type as string
@@ -677,7 +704,7 @@ export const streamBrainstormMessage = action({
           }
         }
 
-        // Capture usage stats from result message
+        // Capture usage stats and errors from result message
         if (msgType === "result") {
           const msg = message as Record<string, unknown>
           const usage = msg.usage as Record<string, unknown> | undefined
@@ -686,6 +713,14 @@ export const streamBrainstormMessage = action({
             outputTokens = usage.output_tokens as number | undefined
           }
           costUsd = msg.total_cost_usd as number | undefined
+
+          // Log SDK-level execution errors
+          if (msg.subtype === "error_during_execution") {
+            const errors = msg.errors as string[] | undefined
+            if (errors?.length) {
+              console.error(`[Claude Brainstorm] SDK execution errors: ${errors.join("; ")}`)
+            }
+          }
         }
       }
 
@@ -733,19 +768,26 @@ export const streamBrainstormMessage = action({
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error)
+      const stderrOutput = stderrChunks.join("").trim()
       console.error(`[Claude Brainstorm] Error: ${errorMessage}`)
+      if (stderrOutput) {
+        console.error(`[Claude Brainstorm] stderr: ${stderrOutput}`)
+      }
 
       // Flush any partial content
       await flushBuffer()
 
-      // Mark as failed
+      // Mark as failed — include stderr in error for visibility
+      const fullError = stderrOutput
+        ? `Claude Code error: ${errorMessage}\nstderr: ${stderrOutput}`
+        : `Claude Code error: ${errorMessage}`
       await ctx.runMutation(internal.generations.fail, {
         generationId: args.generationId,
-        error: `Claude Code error: ${errorMessage}`,
+        error: fullError,
       })
 
       // Record error in LangFuse
-      trace.error(errorMessage)
+      trace.error(fullError)
       await flushLangfuse()
     }
   },
