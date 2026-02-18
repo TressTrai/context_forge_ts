@@ -12,7 +12,6 @@ import type { Id } from "../../../convex/_generated/dataModel"
 import { DroppableZone, SortableBlock, ZONES, useDndOptimistic, type Zone } from "@/components/dnd"
 import { useFileDrop } from "@/hooks/useFileDrop"
 import { useSession } from "@/contexts/SessionContext"
-import { GeneratePanel } from "@/components/GeneratePanel"
 import { BrainstormPanel } from "@/components/BrainstormPanel"
 import { SessionMetrics, ZoneHeader } from "@/components/metrics"
 import { ContextExport } from "@/components/ContextExport"
@@ -181,7 +180,6 @@ function ToolsSection({ sessionId }: { sessionId: Id<"sessions"> }) {
             <SessionMetrics sessionId={sessionId} />
             <ContextExport sessionId={sessionId} />
           </div>
-          <GeneratePanel sessionId={sessionId} />
         </div>
       )}
     </div>

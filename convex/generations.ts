@@ -219,46 +219,6 @@ export const getLatest = query({
 })
 
 /**
- * Start a Claude Code streaming generation.
- *
- * This mutation:
- * 1. Creates a generation record
- * 2. Schedules the Claude streaming action
- * 3. Returns the generation ID immediately for client subscription
- *
- * The streaming action runs asynchronously via scheduler.
- * System prompt is extracted from blocks by the action.
- */
-export const startClaudeGeneration = mutation({
-  args: {
-    sessionId: v.id("sessions"),
-    prompt: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Create generation record
-    const now = Date.now()
-    const generationId = await ctx.db.insert("generations", {
-      sessionId: args.sessionId,
-      provider: "claude",
-      status: "streaming",
-      text: "",
-      createdAt: now,
-      updatedAt: now,
-    })
-
-    // Schedule the streaming action to run immediately
-    // System prompt is extracted from blocks by the action
-    await ctx.scheduler.runAfter(0, api.claudeNode.streamGenerateWithContext, {
-      generationId,
-      sessionId: args.sessionId,
-      prompt: args.prompt,
-    })
-
-    return { generationId }
-  },
-})
-
-/**
  * Start a brainstorm streaming generation.
  *
  * This mutation:
@@ -266,8 +226,8 @@ export const startClaudeGeneration = mutation({
  * 2. Schedules the Claude brainstorm streaming action
  * 3. Returns the generation ID immediately for client subscription
  *
- * Unlike startClaudeGeneration, this accepts conversation history
- * and does NOT auto-save to blocks.
+ * Accepts conversation history. Does NOT auto-save to blocks —
+ * user saves manually with zone selection via saveBrainstormMessage.
  */
 export const startBrainstormGeneration = mutation({
   args: {
@@ -310,59 +270,6 @@ export const startBrainstormGeneration = mutation({
     })
 
     return { generationId }
-  },
-})
-
-/**
- * Save completed generation to blocks.
- * Called when generation completes to persist the result.
- */
-export const saveToBlocks = mutation({
-  args: {
-    generationId: v.id("generations"),
-  },
-  handler: async (ctx, args) => {
-    const generation = await ctx.db.get(args.generationId)
-    if (!generation) {
-      throw new Error("Generation not found")
-    }
-    if (generation.status !== "complete") {
-      throw new Error("Generation not complete")
-    }
-    if (!generation.text.trim()) {
-      throw new Error("Generation has no content")
-    }
-
-    // Get max position for WORKING zone
-    const existingBlocks = await ctx.db
-      .query("blocks")
-      .withIndex("by_session_zone", (q) =>
-        q.eq("sessionId", generation.sessionId).eq("zone", "WORKING")
-      )
-      .collect()
-
-    const maxPosition = existingBlocks.reduce(
-      (max, b) => Math.max(max, b.position),
-      -1
-    )
-
-    // Create block with generated content
-    const now = Date.now()
-    const tokens = countTokens(generation.text)
-
-    return await ctx.db.insert("blocks", {
-      sessionId: generation.sessionId,
-      content: generation.text,
-      type: "ASSISTANT",
-      zone: "WORKING",
-      position: maxPosition + 1,
-      createdAt: now,
-      updatedAt: now,
-      // Token tracking
-      tokens,
-      originalTokens: tokens,
-      tokenModel: DEFAULT_TOKEN_MODEL,
-    })
   },
 })
 

@@ -6,7 +6,7 @@
  * - Claude Code health check (/api/health/claude)
  *
  * Note: Claude uses Convex reactive streaming (see generations.ts and claudeNode.ts),
- * not HTTP endpoints. The frontend calls startClaudeGeneration mutation directly.
+ * not HTTP endpoints. The frontend calls startBrainstormGeneration mutation directly.
  *
  * Ollama and OpenRouter are now client-side only - see src/lib/llm/ modules.
  */
