@@ -3,6 +3,8 @@
  */
 
 import { useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Id } from "../../../convex/_generated/dataModel"
@@ -47,8 +49,6 @@ export function CompressionDialog({
   const [targetZone, setTargetZone] = useState<Zone>("WORKING")
   const [targetType, setTargetType] = useState("note")
 
-  if (!isOpen) return null
-
   // Calculate total tokens
   const totalTokens = blocks.reduce(
     (sum, block) => sum + (block.tokens || 0),
@@ -73,14 +73,24 @@ export function CompressionDialog({
   }
 
   return (
-    <div
+    <AnimatePresence>
+      {isOpen && (
+    <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={handleClose}
       onKeyDown={handleKeyDown}
+      initial={dialogOverlay.initial}
+      animate={dialogOverlay.animate}
+      exit={dialogOverlay.exit}
+      transition={dialogOverlay.transition}
     >
-      <div
+      <motion.div
         className="bg-card border border-border rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        initial={dialogContent.initial}
+        animate={dialogContent.animate}
+        exit={dialogContent.exit}
+        transition={dialogContent.transition}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
@@ -245,7 +255,9 @@ export function CompressionDialog({
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

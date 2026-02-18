@@ -6,6 +6,8 @@
 import { Button } from "@/components/ui/button"
 import { X, FolderTree } from "lucide-react"
 import type { PendingProjectImport } from "@/hooks/useSkillImport"
+import { motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 
 interface ImportProjectConfirmDialogProps {
   pending: PendingProjectImport
@@ -23,8 +25,8 @@ export function ImportProjectConfirmDialog({
   const contexts = pending.contextMap.contexts
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-lg max-h-[80vh] flex flex-col">
+    <motion.div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" initial={dialogOverlay.initial} animate={dialogOverlay.animate} exit={dialogOverlay.exit} transition={dialogOverlay.transition}>
+      <motion.div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-lg max-h-[80vh] flex flex-col" initial={dialogContent.initial} animate={dialogContent.animate} exit={dialogContent.exit} transition={dialogContent.transition} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
@@ -87,7 +89,7 @@ export function ImportProjectConfirmDialog({
             {isImporting ? "Importing..." : "Import as Project"}
           </Button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

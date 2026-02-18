@@ -3,6 +3,8 @@
  */
 
 import { useState, useEffect } from "react"
+import { motion } from "framer-motion"
+import { springs } from "@/lib/motion"
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router"
 import { useQuery, Authenticated, Unauthenticated, AuthLoading } from "convex/react"
 import { useAuthActions } from "@convex-dev/auth/react"
@@ -271,9 +273,14 @@ function AuthenticatedLayout() {
   return (
     <>
       <Header rightContent={<AuthenticatedHeader />} />
-      <main className="mx-auto max-w-6xl px-8 py-6">
+      <motion.main
+        className="mx-auto max-w-6xl px-8 py-6"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={springs.smooth}
+      >
         <Outlet />
-      </main>
+      </motion.main>
     </>
   )
 }

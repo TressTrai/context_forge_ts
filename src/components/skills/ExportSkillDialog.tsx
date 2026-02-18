@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { X, Download, Package } from "lucide-react"
 import { useSkillExport } from "@/hooks/useSkillExport"
 import type { Id } from "../../../convex/_generated/dataModel"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 
 interface ExportSkillDialogProps {
   isOpen: boolean
@@ -23,16 +25,16 @@ export function ExportSkillDialog({
   const { exportAsZip, isExporting, isReady, isProject, blockCount, stepCount } =
     useSkillExport({ sessionId, projectId })
 
-  if (!isOpen) return null
-
   const handleExport = async () => {
     await exportAsZip()
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-md">
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" initial={dialogOverlay.initial} animate={dialogOverlay.animate} exit={dialogOverlay.exit} transition={dialogOverlay.transition}>
+      <motion.div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-md" initial={dialogContent.initial} animate={dialogContent.animate} exit={dialogContent.exit} transition={dialogContent.transition} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -91,7 +93,9 @@ export function ExportSkillDialog({
             {isExporting ? "Exporting..." : "Download ZIP"}
           </Button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   )
 }

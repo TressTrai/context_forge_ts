@@ -4,6 +4,8 @@ import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 
 interface PublishDialogProps {
   isOpen: boolean
@@ -66,8 +68,6 @@ export function PublishDialog({
     }
   }, [categories, category])
 
-  if (!isOpen) return null
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !description.trim() || !category) return
@@ -109,8 +109,10 @@ export function PublishDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6">
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" initial={dialogOverlay.initial} animate={dialogOverlay.animate} exit={dialogOverlay.exit} transition={dialogOverlay.transition}>
+      <motion.div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6" initial={dialogContent.initial} animate={dialogContent.animate} exit={dialogContent.exit} transition={dialogContent.transition} onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold mb-4">
           {publishedMarketplaceId ? "Update Publication" : "Publish to Marketplace"}
         </h2>
@@ -189,7 +191,9 @@ export function PublishDialog({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   )
 }

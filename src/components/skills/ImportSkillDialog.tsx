@@ -13,6 +13,8 @@ import type { Id } from "../../../convex/_generated/dataModel"
 import { Puzzle, Upload, Link, FolderSearch, X, AlertCircle, CheckCircle2 } from "lucide-react"
 import { ImportProjectConfirmDialog } from "./ImportProjectConfirmDialog"
 import { cn } from "@/lib/utils"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 
 interface ImportSkillDialogProps {
   isOpen: boolean
@@ -186,11 +188,11 @@ export function ImportSkillDialog({
     onClose()
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" initial={dialogOverlay.initial} animate={dialogOverlay.animate} exit={dialogOverlay.exit} transition={dialogOverlay.transition}>
+      <motion.div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-lg max-h-[80vh] overflow-y-auto" initial={dialogContent.initial} animate={dialogContent.animate} exit={dialogContent.exit} transition={dialogContent.transition} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -315,7 +317,7 @@ export function ImportSkillDialog({
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {pendingProjectImport && (
         <ImportProjectConfirmDialog
@@ -325,7 +327,9 @@ export function ImportSkillDialog({
           isImporting={isImporting}
         />
       )}
-    </div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   )
 }
 

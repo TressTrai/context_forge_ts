@@ -3,6 +3,8 @@
  * Used for delete confirmations and other actions that need user confirmation.
  */
 
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 import { Button } from "./button"
 
 interface ConfirmDialogProps {
@@ -28,8 +30,6 @@ export function ConfirmDialog({
   destructive = true,
   loading = false,
 }: ConfirmDialogProps) {
-  if (!open) return null
-
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && !loading) {
       onOpenChange(false)
@@ -50,41 +50,56 @@ export function ConfirmDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={handleBackdropClick}
-    >
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6">
-        <div className="space-y-4">
-          {/* Header */}
-          <div>
-            <h2 className="text-lg font-semibold">{title}</h2>
-            <p className="text-sm text-muted-foreground mt-2">{description}</p>
-          </div>
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={handleBackdropClick}
+          initial={dialogOverlay.initial}
+          animate={dialogOverlay.animate}
+          exit={dialogOverlay.exit}
+          transition={dialogOverlay.transition}
+        >
+          <motion.div
+            className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6"
+            initial={dialogContent.initial}
+            animate={dialogContent.animate}
+            exit={dialogContent.exit}
+            transition={dialogContent.transition}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-4">
+              {/* Header */}
+              <div>
+                <h2 className="text-lg font-semibold">{title}</h2>
+                <p className="text-sm text-muted-foreground mt-2">{description}</p>
+              </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              disabled={loading}
-            >
-              {cancelLabel}
-            </Button>
-            <Button
-              onClick={handleConfirm}
-              disabled={loading}
-              className={
-                destructive
-                  ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
-                  : ""
-              }
-            >
-              {loading ? "Processing..." : confirmLabel}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+              {/* Footer */}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCancel}
+                  disabled={loading}
+                >
+                  {cancelLabel}
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={loading}
+                  className={
+                    destructive
+                      ? "bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                      : ""
+                  }
+                >
+                  {loading ? "Processing..." : confirmLabel}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

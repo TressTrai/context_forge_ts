@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { DebouncedButton } from "@/components/ui/debounced-button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -408,11 +410,24 @@ export function BrainstormDialog({
   // Disable provider change after first message
   const canChangeProvider = messages.length === 0
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-5xl h-[80vh] flex flex-col">
+    <AnimatePresence>
+      {isOpen && (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      initial={dialogOverlay.initial}
+      animate={dialogOverlay.animate}
+      exit={dialogOverlay.exit}
+      transition={dialogOverlay.transition}
+    >
+      <motion.div
+        className="bg-background border border-border rounded-lg shadow-xl w-full max-w-5xl h-[80vh] flex flex-col"
+        initial={dialogContent.initial}
+        animate={dialogContent.animate}
+        exit={dialogContent.exit}
+        transition={dialogContent.transition}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-3">
@@ -641,7 +656,7 @@ export function BrainstormDialog({
             Ctrl+Enter to send, Esc to close
           </p>
         </div>
-      </div>
+      </motion.div>
 
       {/* Unsaved content warning dialog */}
       <ConfirmDialog
@@ -658,6 +673,8 @@ export function BrainstormDialog({
           onClose()
         }}
       />
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

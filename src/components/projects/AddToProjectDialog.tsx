@@ -7,6 +7,8 @@ import { useMutation, useQuery } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import type { Id } from "../../../convex/_generated/dataModel"
+import { AnimatePresence, motion } from "framer-motion"
+import { dialogOverlay, dialogContent } from "@/lib/motion"
 
 interface AddToProjectDialogProps {
   isOpen: boolean
@@ -63,13 +65,13 @@ export function AddToProjectDialog({
     }
   }
 
-  if (!isOpen) return null
-
   const currentProjectId = session?.projectId
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6 mt-auto">
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" initial={dialogOverlay.initial} animate={dialogOverlay.animate} exit={dialogOverlay.exit} transition={dialogOverlay.transition}>
+      <motion.div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-md p-6 mt-auto" initial={dialogContent.initial} animate={dialogContent.animate} exit={dialogContent.exit} transition={dialogContent.transition} onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold mb-4">Add Session to Project</h2>
 
         {currentProjectId && (
@@ -161,7 +163,9 @@ export function AddToProjectDialog({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   )
 }

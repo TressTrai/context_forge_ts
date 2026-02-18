@@ -1,8 +1,11 @@
 /**
- * Simple toast notification component.
+ * Simple toast notification component with spring animations.
  */
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react"
+import { createContext, useContext, useState, useCallback } from "react"
+import type { ReactNode } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { springs } from "@/lib/motion"
 import { X, CheckCircle2, AlertCircle, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -62,9 +65,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ toast }}>
       {children}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
-        {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} onRemove={removeToast} />
-        ))}
+        <AnimatePresence mode="popLayout">
+          {toasts.map((t) => (
+            <ToastItem key={t.id} toast={t} onRemove={removeToast} />
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   )
@@ -86,9 +91,14 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
   const Icon = icons[toast.type]
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: 80, scale: 0.95 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: 80, scale: 0.95 }}
+      transition={springs.snappy}
       className={cn(
-        "rounded-lg border p-3 shadow-lg animate-in slide-in-from-right duration-300",
+        "rounded-lg border p-3 shadow-lg",
         colors[toast.type]
       )}
     >
@@ -107,6 +117,6 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
           <X className="w-4 h-4" />
         </button>
       </div>
-    </div>
+    </motion.div>
   )
 }
