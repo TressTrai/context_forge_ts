@@ -13,6 +13,7 @@ import {
   requireSessionAccess,
   canAccessTemplate,
 } from "./lib/auth"
+import { computeContentHash } from "./lib/contentHash"
 
 /**
  * List all projects for the current user.
@@ -228,6 +229,7 @@ export const createSession = mutation({
             position: blockData.position,
             createdAt: now,
             updatedAt: now,
+            contentHash: computeContentHash(blockData.content),
           })
         }
 

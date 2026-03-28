@@ -9,6 +9,7 @@ import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { zoneValidator } from "./lib/validators"
+import { computeContentHash } from "./lib/contentHash"
 import {
   getOptionalUserId,
   canAccessTemplate,
@@ -243,6 +244,7 @@ export const applyToSession = mutation({
         createdAt: now,
         updatedAt: now,
         metadata: blockData.metadata,
+        contentHash: computeContentHash(blockData.content),
       })
     }
 

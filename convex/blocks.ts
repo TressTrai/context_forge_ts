@@ -5,7 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { zoneValidator, type Zone } from "./lib/validators"
 import { countTokens, DEFAULT_TOKEN_MODEL } from "./lib/tokenizer"
 import { computeContentHash } from "./lib/contentHash"
-import { canAccessSession, requireSessionAccess } from "./lib/auth"
+import { canAccessSession, requireSessionAccess, getOptionalUserId } from "./lib/auth"
 import { resolveBlocks } from "./lib/resolve"
 
 /**
@@ -172,18 +172,26 @@ export const findDuplicate = query({
   },
   handler: async (ctx, args) => {
     if (!args.contentHash) return null
-    const match = await ctx.db
+    const userId = await getOptionalUserId(ctx)
+
+    const candidates = await ctx.db
       .query("blocks")
       .withIndex("by_content_hash", (q) => q.eq("contentHash", args.contentHash))
-      .first()
-    if (!match || match.sessionId === args.excludeSessionId) return null
-    // Get session name for display
-    const session = await ctx.db.get(match.sessionId)
-    return {
-      blockId: match._id,
-      sessionId: match.sessionId,
-      sessionName: session?.name ?? "Untitled",
+      .filter((q) => q.neq(q.field("sessionId"), args.excludeSessionId))
+      .collect()
+
+    for (const candidate of candidates) {
+      const session = await ctx.db.get(candidate.sessionId)
+      if (!session) continue
+      // Only match blocks in sessions owned by the same user
+      if (session.userId !== userId) continue
+      return {
+        blockId: candidate._id,
+        sessionId: candidate.sessionId,
+        sessionName: session.name ?? "Untitled",
+      }
     }
+    return null
   },
 })
 
