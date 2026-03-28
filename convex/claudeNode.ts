@@ -524,3 +524,74 @@ export const getSubscriptionUsage = action({
     }
   },
 })
+
+/**
+ * Draft a memory entry from selected text using Claude Code CLI.
+ * Returns raw JSON string to be parsed by the caller.
+ */
+export const draftMemoryEntry = action({
+  args: {
+    selectedText: v.string(),
+    types: v.array(v.object({ name: v.string(), icon: v.string() })),
+  },
+  handler: async (_, args): Promise<string> => {
+    if (!isClaudeCodeEnabled()) throw new Error("Claude Code is disabled")
+
+    const typeList = args.types.map((t) => `- ${t.name} (${t.icon})`).join("\n")
+    const systemPrompt = `You are a memory entry drafting assistant. Given text from a conversation, create a structured memory entry for a project knowledge base.
+
+Available memory types:
+${typeList}
+
+Rules:
+- Pick the most appropriate type from the list above
+- Write a concise, specific title (not just the first line)
+- Distill the insight — don't copy verbatim
+- Use lowercase, #-prefixed tags (e.g. #decision, #backend, #ch3)
+- Write the title and content in the same language as the input text
+
+Respond with ONLY valid JSON, no markdown fences:
+{"type": "...", "title": "...", "content": "...", "tags": ["#...", "#..."]}`
+
+    const userPrompt = `Draft a memory entry from this text:\n\n${args.selectedText}`
+
+    let fullText = ""
+
+    for await (const message of claudeQuery({
+      prompt: userPrompt,
+      options: {
+        allowedTools: [],
+        maxTurns: 1,
+        systemPrompt,
+        pathToClaudeCodeExecutable: getClaudeCodePath(),
+        maxBudgetUsd: 0.10,
+      },
+    })) {
+      const msgType = (message as Record<string, unknown>).type as string
+
+      if (msgType === "stream_event") {
+        const event = (message as Record<string, unknown>).event as Record<string, unknown> | undefined
+        if (event?.type === "content_block_delta") {
+          const delta = event.delta as Record<string, unknown> | undefined
+          if (delta?.type === "text_delta" && typeof delta.text === "string") {
+            fullText += delta.text
+          }
+        }
+      }
+
+      if (msgType === "assistant") {
+        const msg = message as Record<string, unknown>
+        const content = (msg.message as Record<string, unknown> | undefined)?.content as Array<Record<string, unknown>> | undefined
+        if (content) {
+          for (const block of content) {
+            if (block.type === "text" && typeof block.text === "string") {
+              fullText += block.text
+            }
+          }
+        }
+      }
+    }
+
+    return fullText
+  },
+})

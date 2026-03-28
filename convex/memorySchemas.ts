@@ -16,9 +16,9 @@ type MemoryType = { name: string; color: string; icon: string }
 
 export const STARTER_TEMPLATES: Record<string, MemoryType[]> = {
   general: [
-    { name: "note", color: "#6B7280", icon: "📝" },
-    { name: "decision", color: "#3B82F6", icon: "⚖️" },
     { name: "tension", color: "#EF4444", icon: "⚡" },
+    { name: "decision", color: "#3B82F6", icon: "⚖️" },
+    { name: "note", color: "#6B7280", icon: "📝" },
   ],
   fiction: [
     { name: "character", color: "#8B5CF6", icon: "🧑" },
@@ -86,6 +86,7 @@ export const listTemplates = query({
       name,
       typeCount: types.length,
       typeNames: types.map((t) => t.name),
+      types,
     }))
   },
 })

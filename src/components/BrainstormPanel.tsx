@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from "react"
-import { useQuery, useMutation } from "convex/react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { useQuery, useMutation, useAction } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { BrainstormDialog } from "@/components/BrainstormDialog"
+import { SaveToMemoryDialog } from "@/components/SaveToMemoryDialog"
 import { useBrainstorm, type Zone } from "@/hooks/useBrainstorm"
 import type { Id } from "../../convex/_generated/dataModel"
 import * as ollamaClient from "@/lib/llm/ollama"
@@ -81,11 +82,43 @@ interface BrainstormPanelProps {
 export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelProps) {
   const health = useProviderHealth()
   const session = useQuery(api.sessions.get, { id: sessionId })
-  const [showSystemPrompt, setShowSystemPrompt] = useState(false)
-  const [newSystemPrompt, setNewSystemPrompt] = useState("")
-  const [isCreatingBlock, setIsCreatingBlock] = useState(false)
 
   const createBlock = useMutation(api.blocks.create)
+  const updateBlock = useMutation(api.blocks.update)
+  const createMemoryEntry = useMutation(api.memoryEntries.create)
+  const claudeDraftMemoryEntry = useAction(api.claudeNode.draftMemoryEntry)
+  const updateSessionTagsMutation = useMutation(api.sessions.updateSessionTags)
+
+  // Memory schema for Save-to-Memory feature
+  const memorySchema = useQuery(
+    api.memorySchemas.getByProject,
+    session?.projectId ? { projectId: session.projectId } : "skip"
+  )
+  const [saveToMemoryText, setSaveToMemoryText] = useState<string | null>(null)
+
+  const handleClaudeDraft = useCallback(
+    async (text: string, types: Array<{ name: string; icon: string }>) => {
+      const raw = await claudeDraftMemoryEntry({ selectedText: text, types })
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+      try {
+        const parsed = JSON.parse(cleaned)
+        return {
+          type: parsed.type ?? types[0]?.name ?? "note",
+          title: parsed.title ?? "Untitled",
+          content: parsed.content ?? text,
+          tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        }
+      } catch {
+        return {
+          type: types[0]?.name ?? "note",
+          title: text.slice(0, 60).split("\n")[0].trim(),
+          content: text,
+          tags: [],
+        }
+      }
+    },
+    [claudeDraftMemoryEntry]
+  )
 
   // Get blocks in PERMANENT zone to find system_prompt blocks
   const permanentBlocks = useQuery(api.blocks.listByZone, {
@@ -115,24 +148,6 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
       await brainstorm.saveMessage(messageId, zone)
     } catch (err) {
       console.error("Failed to save message:", err)
-    }
-  }
-
-  // Create a new system_prompt block in PERMANENT zone
-  const handleCreateSystemPromptBlock = async () => {
-    if (!newSystemPrompt.trim()) return
-
-    setIsCreatingBlock(true)
-    try {
-      await createBlock({
-        sessionId,
-        content: newSystemPrompt.trim(),
-        type: "system_prompt",
-        zone: "PERMANENT",
-      })
-      setNewSystemPrompt("")
-    } finally {
-      setIsCreatingBlock(false)
     }
   }
 
@@ -211,7 +226,34 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
           onToggleSkill={brainstorm.toggleSkill}
           openrouterSessionCost={brainstorm.openrouterSessionCost}
           conversationRestored={brainstorm.conversationRestored}
+          onSaveToMemory={memorySchema && session?.projectId ? setSaveToMemoryText : undefined}
+          sessionTags={session?.sessionTags}
+          onUpdateSessionTags={session ? (tags) => updateSessionTagsMutation({ sessionId, tags }) : undefined}
+          availableMemoryTags={brainstorm.availableMemoryTags}
+          systemPromptBlock={systemPromptBlock ? { content: systemPromptBlock.content } : null}
+          onSaveSystemPrompt={async (content) => {
+            if (systemPromptBlock) {
+              await updateBlock({ id: systemPromptBlock._id, content })
+            } else {
+              await createBlock({ sessionId, content, type: "system_prompt", zone: "PERMANENT" })
+            }
+          }}
         />
+        {memorySchema && session?.projectId && (
+          <SaveToMemoryDialog
+            isOpen={saveToMemoryText !== null}
+            onClose={() => setSaveToMemoryText(null)}
+            text={saveToMemoryText ?? ""}
+            projectId={session.projectId}
+            types={memorySchema.types}
+            provider={brainstorm.provider}
+            onDraft={brainstorm.provider === "claude" ? handleClaudeDraft : undefined}
+          onCreateEntry={async (args) => {
+              await createMemoryEntry(args)
+              setSaveToMemoryText(null)
+            }}
+          />
+        )}
       </>
     )
   }
@@ -232,13 +274,6 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
 
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-          >
-            {showSystemPrompt ? "Hide" : "Show"} System Prompt
-          </Button>
-          <Button
             onClick={() => brainstorm.open()}
             disabled={
               // Optimistic: allow opening while health checks are pending
@@ -256,58 +291,6 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
       <p className="text-sm text-muted-foreground mt-2">
         Have a multi-turn conversation with your context. Save valuable messages as blocks.
       </p>
-
-      {/* System prompt section */}
-      {showSystemPrompt && (
-        <div className="mt-4 p-4 rounded-md bg-muted/50 border border-border">
-          <div className="flex items-center justify-between mb-2">
-            <label htmlFor="system-prompt" className="text-sm font-medium">
-              System Prompt (LLM Role)
-            </label>
-            {systemPromptBlock && (
-              <span className="inline-flex items-center gap-1 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
-                Active Block
-              </span>
-            )}
-          </div>
-
-          {systemPromptBlock ? (
-            // Show existing system prompt block (read-only)
-            <div className="space-y-2">
-              <div className="p-3 rounded-md bg-background border border-input text-sm font-mono whitespace-pre-wrap">
-                {systemPromptBlock.content}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Edit this block in the PERMANENT zone above.
-              </p>
-            </div>
-          ) : (
-            // Show form to create new system prompt block
-            <div className="space-y-2">
-              <textarea
-                id="system-prompt"
-                value={newSystemPrompt}
-                onChange={(e) => setNewSystemPrompt(e.target.value)}
-                placeholder="Define the LLM's role and behavior. E.g., 'You are a game design expert specializing in narrative systems...'"
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none font-mono"
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  This prompt will be sent with every brainstorm message.
-                </span>
-                <Button
-                  size="sm"
-                  onClick={handleCreateSystemPromptBlock}
-                  disabled={isCreatingBlock || !newSystemPrompt.trim()}
-                >
-                  {isCreatingBlock ? "Creating..." : "Create System Prompt Block"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Show recent messages preview */}
       {brainstorm.messages.length > 0 && (
@@ -360,7 +343,22 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
         onToggleSkill={brainstorm.toggleSkill}
         openrouterSessionCost={brainstorm.openrouterSessionCost}
         conversationRestored={brainstorm.conversationRestored}
+        onSaveToMemory={memorySchema && session?.projectId ? setSaveToMemoryText : undefined}
       />
+      {memorySchema && session?.projectId && (
+        <SaveToMemoryDialog
+          isOpen={saveToMemoryText !== null}
+          onClose={() => setSaveToMemoryText(null)}
+          text={saveToMemoryText ?? ""}
+          projectId={session.projectId}
+          types={memorySchema.types}
+          provider={brainstorm.provider}
+          onCreateEntry={async (args) => {
+            await createMemoryEntry(args)
+            setSaveToMemoryText(null)
+          }}
+        />
+      )}
     </div>
   )
 }

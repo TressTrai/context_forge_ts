@@ -7,6 +7,7 @@ import * as openrouterClient from "@/lib/llm/openrouter"
 import {
   assembleContextWithConversation,
   extractSystemPromptFromBlocks,
+  renderMemoryBlock,
   NO_TOOLS_SUFFIX,
 } from "@/lib/llm/context"
 import { DEFAULT_ACTIVE_SKILLS, getActiveSkillsContent } from "@/lib/llm/skills"
@@ -123,6 +124,9 @@ interface UseBrainstormResult {
   // OpenRouter session cost (USD)
   openrouterSessionCost: number
 
+  // All unique tags from project memory entries (for tag picker)
+  availableMemoryTags: string[]
+
   // State
   error: string | null
 }
@@ -210,6 +214,15 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // Get blocks for context assembly (client-side)
   const blocks = useQuery(api.blocks.list, { sessionId })
+
+  // Get session metadata (for memory injection)
+  const session = useQuery(api.sessions.get, { id: sessionId })
+
+  // Get memory entries for the project (only when session is loaded)
+  const memoryEntries = useQuery(
+    api.memoryEntries.listByProject,
+    session?.projectId ? { projectId: session.projectId } : "skip"
+  )
 
   // Reset streaming state and restore conversation when session changes
   useEffect(() => {
@@ -380,6 +393,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
 
+      // Render memory block if available
+      const pinnedIds = new Set(session?.pinnedMemories?.map(String) ?? [])
+      const renderedMemory = memoryEntries?.length
+        ? renderMemoryBlock(memoryEntries, session?.sessionTags ?? [], pinnedIds)
+        : ""
+
       // Build messages for Ollama
       const ollamaMessages: ollamaClient.OllamaMessage[] = []
 
@@ -391,12 +410,21 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         })
       }
 
-      // Add context messages
-      for (const msg of contextMessages) {
-        ollamaMessages.push({
-          role: msg.role,
-          content: msg.content,
-        })
+      // Add context messages (excluding the final user message — memory goes before it)
+      const contextWithoutLast = contextMessages.slice(0, -1)
+      const lastMessage = contextMessages[contextMessages.length - 1]
+      for (const msg of contextWithoutLast) {
+        ollamaMessages.push({ role: msg.role, content: msg.content })
+      }
+
+      // Inject memory block just before the user message
+      if (renderedMemory) {
+        ollamaMessages.push({ role: "user", content: renderedMemory })
+        ollamaMessages.push({ role: "assistant", content: "Understood. I have the project memory context." })
+      }
+
+      if (lastMessage) {
+        ollamaMessages.push({ role: lastMessage.role, content: lastMessage.content })
       }
 
       let fullText = ""
@@ -429,7 +457,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setStreamingText("")
       }
     },
-    [blocks, activeSkills]
+    [blocks, activeSkills, session, memoryEntries]
   )
 
   // Send message via OpenRouter (client-side streaming)
@@ -446,6 +474,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
 
+      // Render memory block if available
+      const pinnedIdsOR = new Set(session?.pinnedMemories?.map(String) ?? [])
+      const renderedMemoryOR = memoryEntries?.length
+        ? renderMemoryBlock(memoryEntries, session?.sessionTags ?? [], pinnedIdsOR)
+        : ""
+
       // Build messages for OpenRouter
       const openrouterMessages: openrouterClient.OpenRouterMessage[] = []
 
@@ -457,12 +491,21 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         })
       }
 
-      // Add context messages
-      for (const msg of contextMessages) {
-        openrouterMessages.push({
-          role: msg.role,
-          content: msg.content,
-        })
+      // Add context messages (excluding the final user message — memory goes before it)
+      const orContextWithoutLast = contextMessages.slice(0, -1)
+      const orLastMessage = contextMessages[contextMessages.length - 1]
+      for (const msg of orContextWithoutLast) {
+        openrouterMessages.push({ role: msg.role, content: msg.content })
+      }
+
+      // Inject memory block just before the user message
+      if (renderedMemoryOR) {
+        openrouterMessages.push({ role: "user", content: renderedMemoryOR })
+        openrouterMessages.push({ role: "assistant", content: "Understood. I have the project memory context." })
+      }
+
+      if (orLastMessage) {
+        openrouterMessages.push({ role: orLastMessage.role, content: orLastMessage.content })
       }
 
       let fullText = ""
@@ -514,7 +557,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setStreamingText("")
       }
     },
-    [blocks, activeSkills]
+    [blocks, activeSkills, session, memoryEntries]
   )
 
   // Send message via Claude (Convex mutations - backend)
@@ -798,6 +841,11 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
     // OpenRouter session cost
     openrouterSessionCost,
+
+    // All unique tags from project memory entries
+    availableMemoryTags: Array.from(
+      new Set((memoryEntries ?? []).flatMap((e) => e.tags))
+    ).sort(),
 
     // Error
     error,

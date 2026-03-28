@@ -216,6 +216,70 @@ export function assembleContextWithConversation(
 }
 
 /**
+ * Render matching memory entries into a structured text block for LLM context.
+ * Mirrors the server-side logic in convex/lib/memoryRendering.ts.
+ *
+ * Entries with no tag overlap with sessionTags are excluded (score = 0).
+ * Pinned entries are always included (score = Infinity).
+ */
+export interface MemoryEntryForRendering {
+  type: string
+  title: string
+  content: string
+  tags: string[]
+  _id: string
+}
+
+export function renderMemoryBlock(
+  entries: MemoryEntryForRendering[],
+  sessionTags: string[],
+  pinnedIds: Set<string>
+): string {
+  if (entries.length === 0) return ""
+
+  const scored = entries
+    .map((entry) => {
+      if (pinnedIds.has(entry._id)) return { entry, score: Infinity }
+      if (sessionTags.length === 0 || entry.tags.length === 0) return { entry, score: 0 }
+      const sessionSet = new Set(sessionTags)
+      const score = entry.tags.filter((t) => sessionSet.has(t)).length
+      return { entry, score }
+    })
+    .filter((s) => s.score > 0)
+
+  if (scored.length === 0) return ""
+
+  const byType = new Map<string, Array<{ entry: MemoryEntryForRendering; score: number }>>()
+  for (const s of scored) {
+    const existing = byType.get(s.entry.type) ?? []
+    existing.push(s)
+    byType.set(s.entry.type, existing)
+  }
+
+  const sortedTypes = [...byType.entries()].sort((a, b) => {
+    const scoreA = a[1].reduce((sum, s) => sum + (s.score === Infinity ? 1000 : s.score), 0)
+    const scoreB = b[1].reduce((sum, s) => sum + (s.score === Infinity ? 1000 : s.score), 0)
+    return scoreB - scoreA
+  })
+
+  const parts: string[] = ["## Project Memory"]
+  for (const [type, items] of sortedTypes) {
+    items.sort((a, b) => {
+      if (a.score === Infinity && b.score === Infinity) return 0
+      if (a.score === Infinity) return -1
+      if (b.score === Infinity) return 1
+      return b.score - a.score
+    })
+    parts.push(`\n### ${type}`)
+    for (const { entry } of items) {
+      parts.push(`**${entry.title}** — ${entry.content}`)
+    }
+  }
+
+  return parts.join("\n")
+}
+
+/**
  * Calculate approximate token count for context.
  * Uses rough estimate of 4 characters per token.
  */

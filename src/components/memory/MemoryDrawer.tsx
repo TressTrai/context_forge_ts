@@ -4,7 +4,7 @@ import { springs } from "@/lib/motion"
 import { useMemory } from "@/hooks/useMemory"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { ChevronUp, ChevronDown, X, Search, Pin, Plus, Pencil, Trash2, Tag } from "lucide-react"
+import { ChevronUp, ChevronDown, X, Search, Pin, Plus, Pencil, Trash2, ArrowRight, Copy, Check } from "lucide-react"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { cn } from "@/lib/utils"
 import { parseTags } from "@/lib/tags"
@@ -14,16 +14,17 @@ interface MemoryDrawerProps {
   projectId: Id<"projects"> | undefined
   sessionId: Id<"sessions"> | undefined
   pinnedMemories?: Id<"memoryEntries">[]
-  sessionTags?: string[]
 }
 
-export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags }: MemoryDrawerProps) {
+export function MemoryDrawer({ projectId, sessionId, pinnedMemories }: MemoryDrawerProps) {
   const [state, setState] = useState<"collapsed" | "peek" | "full">("collapsed")
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
 
   // Task 9: create form state
   const [isCreating, setIsCreating] = useState(false)
+  const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Task 10: edit/delete state
   const [editingId, setEditingId] = useState<Id<"memoryEntries"> | null>(null)
@@ -35,10 +36,6 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Task 12: session tags editing
-  const [isEditingTags, setIsEditingTags] = useState(false)
-  const [tagsInput, setTagsInput] = useState("")
-  const [isSavingTags, setIsSavingTags] = useState(false)
 
   const memory = useMemory(projectId, sessionId)
   const pinnedSet = useMemo(
@@ -87,6 +84,48 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
     setEditTags(entry.tags.join(", "))
   }
 
+  const copyEntries = async (entries: typeof filteredEntries) => {
+    const byType = new Map<string, typeof filteredEntries>()
+    for (const e of entries) {
+      byType.set(e.type, [...(byType.get(e.type) ?? []), e])
+    }
+    const lines: string[] = ["# Project Memory", ""]
+    for (const [type, items] of byType) {
+      lines.push(`## ${type}`)
+      for (const e of items) {
+        lines.push(`**${e.title}** — ${e.content}`)
+        if (e.tags.length > 0) lines.push(`Tags: ${e.tags.join(", ")}`)
+        lines.push("")
+      }
+    }
+    const text = lines.join("\n").trim()
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement("textarea")
+        ta.value = text
+        ta.style.position = "fixed"
+        ta.style.left = "-999999px"
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+
+  const resolveEntry = (entry: { _id: Id<"memoryEntries">; type: string; title: string; content: string; tags: string[] }) => {
+    const decisionType = memory.schema?.types.find((t) => t.name === "decision")
+    setEditingId(entry._id)
+    setEditType(decisionType?.name ?? "decision")
+    setEditTitle(entry.title)
+    setEditContent(entry.content)
+    setEditTags(entry.tags.join(", "))
+  }
+
   const cancelEditing = () => {
     setEditingId(null)
   }
@@ -119,45 +158,74 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
     }
   }
 
-  // Task 12: session tags save
-  const saveSessionTags = async () => {
-    if (!memory.updateSessionTags || isSavingTags) return
-    setIsSavingTags(true)
-    try {
-      await memory.updateSessionTags(parseTags(tagsInput))
-      setIsEditingTags(false)
-    } finally {
-      setIsSavingTags(false)
-    }
-  }
 
-  // Task 11: Schema setup content
-  const renderSchemaSetup = () => (
-    <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-      <h3 className="text-sm font-medium mb-2">Set up memory types for this project</h3>
-      <p className="text-xs text-muted-foreground mb-4">
-        Choose a starter template to define what types of memory entries you can create.
-      </p>
-      <div className="flex flex-wrap gap-2 justify-center">
-        {(memory.schemaTemplates ?? []).map((template) => (
+  // Schema setup content
+  const renderSchemaSetup = () => {
+    const templates = memory.schemaTemplates ?? []
+    const preview = previewTemplate ? templates.find((t) => t.name === previewTemplate) : null
+
+    if (preview) {
+      return (
+        <div className="py-3 px-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPreviewTemplate(null)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ← Back
+            </button>
+            <span className="text-sm font-medium capitalize">{preview.name}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(preview.types ?? []).map((t) => (
+              <span key={t.name} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-border bg-muted">
+                <span>{t.icon}</span>
+                <span>{t.name}</span>
+              </span>
+            ))}
+          </div>
           <Button
-            key={template.name}
-            variant="outline"
             size="sm"
-            className="h-8 text-xs"
-            onClick={() => memory.createSchemaFromTemplate({ projectId: projectId!, templateName: template.name })}
+            onClick={() => {
+              memory.createSchemaFromTemplate({ projectId: projectId!, templateName: preview.name })
+              setPreviewTemplate(null)
+            }}
           >
-            {template.name} ({template.typeCount} types)
+            Apply "{preview.name}" template
           </Button>
-        ))}
+        </div>
+      )
+    }
+
+    return (
+      <div className="py-4 px-4 space-y-3">
+        <div className="text-center">
+          <h3 className="text-sm font-medium">Set up memory types</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose a template to see what types it includes.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {templates.map((template) => (
+            <Button
+              key={template.name}
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs capitalize"
+              onClick={() => setPreviewTemplate(template.name)}
+            >
+              {template.name} ({template.typeCount} types)
+            </Button>
+          ))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <>
       {/* Collapsed bar */}
-      {state === "collapsed" && (totalEntries > 0 || !hasSchema) && (
+      {state === "collapsed" && (
         <motion.div
           initial={{ y: 48 }}
           animate={{ y: 0 }}
@@ -202,17 +270,28 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
                   <span className="text-sm font-medium">
                     Memory ({totalEntries})
                   </span>
-                  {/* Task 9: + button to create entry (only when schema exists) */}
                   {hasSchema && state === "full" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={() => setIsCreating(!isCreating)}
-                      title="Create memory entry"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setIsCreating(!isCreating)}
+                        title="Create memory entry"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => copyEntries(filteredEntries)}
+                        disabled={filteredEntries.length === 0}
+                        title="Copy entries to clipboard"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </Button>
+                    </>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -297,68 +376,6 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
                     </div>
                   </div>
 
-                  {/* Task 12: Session tags section */}
-                  {memory.updateSessionTags && (
-                    <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border shrink-0">
-                      <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      {!isEditingTags ? (
-                        <>
-                          <div className="flex gap-1 flex-wrap flex-1 min-w-0">
-                            {(sessionTags ?? []).length > 0 ? (
-                              (sessionTags ?? []).map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary"
-                                >
-                                  {tag}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-xs text-muted-foreground">No session tags</span>
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs shrink-0"
-                            onClick={() => {
-                              setTagsInput((sessionTags ?? []).join(", "))
-                              setIsEditingTags(true)
-                            }}
-                          >
-                            Edit tags
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="text"
-                            value={tagsInput}
-                            onChange={(e) => setTagsInput(e.target.value)}
-                            placeholder="Tags (comma-separated)"
-                            className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs"
-                            autoFocus
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs shrink-0"
-                            onClick={() => setIsEditingTags(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="h-6 px-2 text-xs shrink-0"
-                            onClick={saveSessionTags}
-                            disabled={isSavingTags}
-                          >
-                            {isSavingTags ? "..." : "Save"}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
 
                   {/* Entry list */}
                   <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5">
@@ -470,8 +487,18 @@ export function MemoryDrawer({ projectId, sessionId, pinnedMemories, sessionTags
                                 </div>
                               )}
                             </div>
-                            {/* Action icons: pin, edit, delete */}
+                            {/* Action icons: resolve, pin, edit, delete */}
                             <div className="flex items-center gap-0.5 shrink-0">
+                              {/* Resolve button — only for tension entries */}
+                              {entry.type === "tension" && memory.schema?.types.some((t) => t.name === "decision") && (
+                                <button
+                                  onClick={() => resolveEntry(entry)}
+                                  className="p-1 rounded hover:bg-accent text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Resolve → decision"
+                                >
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {/* Task 10: Edit button */}
                               <button
                                 onClick={() => startEditing(entry)}

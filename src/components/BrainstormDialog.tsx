@@ -93,6 +93,15 @@ interface BrainstormDialogProps {
   openrouterSessionCost?: number
   // Conversation was restored from localStorage
   conversationRestored?: boolean
+  // Save-to-Memory
+  onSaveToMemory?: (text: string) => void
+  // Session tags (for memory injection)
+  sessionTags?: string[]
+  onUpdateSessionTags?: (tags: string[]) => Promise<void>
+  availableMemoryTags?: string[]
+  // System prompt editing
+  systemPromptBlock?: { content: string } | null
+  onSaveSystemPrompt?: (content: string) => Promise<void>
 }
 
 // Message bubble component
@@ -102,6 +111,7 @@ function MessageBubble({
   onSave,
   onRetry,
   onEdit,
+  onSaveToMemory,
   isStreaming,
 }: {
   message: Message
@@ -109,6 +119,7 @@ function MessageBubble({
   onSave: (zone: Zone) => void
   onRetry: () => void
   onEdit: (newContent: string) => void
+  onSaveToMemory?: (text: string) => void
   isStreaming: boolean
 }) {
   const [copied, setCopied] = useState(false)
@@ -267,6 +278,18 @@ function MessageBubble({
           >
             Retry
           </Button>
+          {!isUser && onSaveToMemory && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onSaveToMemory(message.content)}
+              disabled={isStreaming}
+              className="h-6 px-2 text-xs"
+              title="Save this response as a memory entry"
+            >
+              Memory
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -330,9 +353,25 @@ export function BrainstormDialog({
   onToggleSkill,
   openrouterSessionCost,
   conversationRestored,
+  onSaveToMemory,
+  sessionTags,
+  onUpdateSessionTags,
+  availableMemoryTags = [],
+  systemPromptBlock,
+  onSaveSystemPrompt,
 }: BrainstormDialogProps) {
   const [inputValue, setInputValue] = useState("")
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null)
+  const [isEditingTags, setIsEditingTags] = useState(false)
+  const [optimisticTags, setOptimisticTags] = useState<string[] | null>(null)
+
+  // Keep optimistic state in sync when server value changes (e.g. after save)
+  useEffect(() => {
+    setOptimisticTags(null)
+  }, [sessionTags])
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [systemPromptInput, setSystemPromptInput] = useState("")
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -543,101 +582,142 @@ export function BrainstormDialog({
               </Button>
             </div>
           </div>
-          {/* Row 2: Toggles + context badges */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Claude toggles */}
-            {provider === "claude" && onDisableAgentBehaviorChange && !providerHealth?.claude?.disabled && (
-              <label
-                className="inline-flex items-center gap-1.5 text-xs cursor-pointer"
-                title="When enabled, appends instructions to prevent Claude from pretending to have tool access"
-              >
-                <input
-                  type="checkbox"
-                  checked={disableAgentBehavior}
-                  onChange={(e) => onDisableAgentBehaviorChange(e.target.checked)}
-                  disabled={!canChangeProvider || isStreaming}
-                  className="rounded border-input"
-                />
-                <span className="text-muted-foreground">No tools</span>
-              </label>
-            )}
-            {provider === "claude" && onPreventSelfTalkChange && !providerHealth?.claude?.disabled && (
-              <label
-                className="inline-flex items-center gap-1.5 text-xs cursor-pointer"
-                title="When enabled, prevents the model from simulating user messages and continuing the conversation with itself"
-              >
-                <input
-                  type="checkbox"
-                  checked={preventSelfTalk}
-                  onChange={(e) => onPreventSelfTalkChange(e.target.checked)}
-                  disabled={!canChangeProvider || isStreaming}
-                  className="rounded border-input"
-                />
-                <span className="text-muted-foreground">No self-talk</span>
-              </label>
-            )}
-            {/* System prompt indicator */}
-            {systemPrompt && (
-              <span
-                className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
-                title={systemPrompt}
-              >
-                System Prompt Active
-              </span>
-            )}
-            {/* Active skills chips */}
-            {activeSkills && onToggleSkill && Object.entries(activeSkills).map(([skillId, enabled]) => {
-              const skill = SKILLS[skillId]
-              if (!skill) return null
-              return (
-                <span
-                  key={skillId}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full cursor-pointer transition-colors",
-                    enabled
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                      : "bg-muted text-muted-foreground line-through"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() => onToggleSkill(skillId)}
-                    className="rounded border-input h-3 w-3"
-                  />
-                  <span
-                    onClick={() => setExpandedSkill(expandedSkill === skillId ? null : skillId)}
-                    title="Click to preview skill content"
-                  >
-                    {skill.label}
-                  </span>
-                </span>
-              )
-            })}
+          {/* Row 2: Settings button */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-6 px-2 text-xs ml-auto", showAdvanced && "bg-accent")}
+              onClick={() => {
+                if (!showAdvanced && systemPromptBlock) {
+                  setSystemPromptInput(systemPromptBlock.content)
+                }
+                setShowAdvanced(!showAdvanced)
+              }}
+            >
+              Settings {showAdvanced ? "▲" : "▼"}
+            </Button>
           </div>
         </div>
 
-        {/* Expanded skill preview */}
-        {expandedSkill && SKILLS[expandedSkill] && (
-          <div className="mx-4 mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 max-h-[200px] overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                {SKILLS[expandedSkill].label}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 px-1 text-xs"
-                onClick={() => setExpandedSkill(null)}
-              >
-                Close
-              </Button>
-            </div>
-            <div className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
-              {SKILLS[expandedSkill].content}
-            </div>
+        {/* Advanced Settings panel */}
+        {showAdvanced && (
+          <div className="mx-4 mt-2 mb-1 rounded-lg border border-border bg-card/50 divide-y divide-border">
+
+            {/* Memory Tags */}
+            {onUpdateSessionTags && (
+              <div className="p-3 space-y-2">
+                <span className="text-xs font-medium">Memory Tags</span>
+                <p className="text-[10px] text-muted-foreground">
+                  Only memory entries matching these tags will be included in context.
+                </p>
+                {availableMemoryTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {availableMemoryTags.map((tag) => {
+                      const activeTags = optimisticTags ?? sessionTags ?? []
+                      const active = activeTags.includes(tag)
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => {
+                            const next = active
+                              ? activeTags.filter((t) => t !== tag)
+                              : [...activeTags, tag]
+                            setOptimisticTags(next)
+                            onUpdateSessionTags(next).catch(() => setOptimisticTags(null))
+                          }}
+                          className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded-full border transition-colors",
+                            active
+                              ? "bg-primary/10 text-primary border-primary/30"
+                              : "bg-muted text-muted-foreground border-transparent hover:bg-accent"
+                          )}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">No tags on memory entries yet</span>
+                )}
+              </div>
+            )}
+
+            {/* Skills / Brainstorming Methodology */}
+            {activeSkills && onToggleSkill && (
+              <div className="p-3 space-y-2">
+                <span className="text-xs font-medium">Brainstorming Methodology</span>
+                <div className="flex flex-col gap-1.5">
+                  {Object.entries(activeSkills).map(([skillId, enabled]) => {
+                    const skill = SKILLS[skillId]
+                    if (!skill) return null
+                    return (
+                      <div key={skillId} className="flex flex-col gap-1">
+                        <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={() => onToggleSkill(skillId)}
+                            className="rounded border-input"
+                          />
+                          <span className="text-muted-foreground">{skill.label}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedSkill(expandedSkill === skillId ? null : skillId)}
+                            className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground underline"
+                          >
+                            {expandedSkill === skillId ? "hide" : "preview"}
+                          </button>
+                        </label>
+                        {expandedSkill === skillId && (
+                          <div className="ml-5 text-[10px] text-muted-foreground whitespace-pre-wrap font-mono bg-muted/50 rounded p-2 max-h-[150px] overflow-y-auto">
+                            {skill.content}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Claude-specific options */}
+            {provider === "claude" && !providerHealth?.claude?.disabled && (
+              <div className="p-3 space-y-2">
+                <span className="text-xs font-medium">Claude Options</span>
+                <div className="flex flex-col gap-1.5">
+                  {onDisableAgentBehaviorChange && (
+                    <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={disableAgentBehavior}
+                        onChange={(e) => onDisableAgentBehaviorChange(e.target.checked)}
+                        disabled={!canChangeProvider || isStreaming}
+                        className="rounded border-input"
+                      />
+                      <span className="text-muted-foreground">No tools — prevent Claude from pretending to have tool access</span>
+                    </label>
+                  )}
+                  {onPreventSelfTalkChange && (
+                    <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={preventSelfTalk}
+                        onChange={(e) => onPreventSelfTalkChange(e.target.checked)}
+                        disabled={!canChangeProvider || isStreaming}
+                        className="rounded border-input"
+                      />
+                      <span className="text-muted-foreground">No self-talk — prevent model from continuing conversation with itself</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
+
 
         {/* Messages */}
         <div
@@ -672,6 +752,7 @@ export function BrainstormDialog({
               onSave={(zone) => onSaveMessage(message.id, zone)}
               onRetry={() => onRetryMessage(message.id)}
               onEdit={(newContent) => onEditMessage(message.id, newContent)}
+              onSaveToMemory={onSaveToMemory}
               isStreaming={isStreaming}
             />
           ))}
