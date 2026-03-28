@@ -10,9 +10,41 @@ import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Anvil } from "lucide-react"
+import { Anvil, Eye, EyeOff } from "lucide-react"
 
 type AuthMode = "signIn" | "signUp"
+
+interface FieldErrors {
+  name?: string
+  email?: string
+  password?: string
+}
+
+function mapAuthError(err: unknown, mode: AuthMode): string {
+  const message = err instanceof Error ? err.message : String(err)
+  const lower = message.toLowerCase()
+
+  if (lower.includes("invalidsecret") || lower.includes("invalid secret") || lower.includes("incorrect password")) {
+    return "Incorrect password. Please try again."
+  }
+  if (lower.includes("invalidaccountid") || lower.includes("could not sign in") || lower.includes("no account")) {
+    return mode === "signIn"
+      ? "No account found with this email address."
+      : "Could not create account. Please try a different email."
+  }
+  if (lower.includes("accountalreadyexists") || lower.includes("already exists")) {
+    return "An account with this email already exists. Try signing in instead."
+  }
+  if (lower.includes("too many") || lower.includes("rate limit")) {
+    return "Too many attempts. Please wait a moment and try again."
+  }
+  if (message) {
+    return message
+  }
+  return mode === "signIn"
+    ? "Sign in failed. Please check your credentials and try again."
+    : "Sign up failed. Please try again."
+}
 
 function LoginPage() {
   const { signIn } = useAuthActions()
@@ -24,7 +56,32 @@ function LoginPage() {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  const validate = (): boolean => {
+    const errors: FieldErrors = {}
+
+    if (mode === "signUp" && !name.trim()) {
+      errors.name = "Please enter your name."
+    }
+
+    if (!email.trim()) {
+      errors.email = "Please enter your email."
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = "Please enter a valid email address."
+    }
+
+    if (!password) {
+      errors.password = "Please enter your password."
+    } else if (password.length < 8) {
+      errors.password = "Password must be at least 8 characters."
+    }
+
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   // Redirect to home when authenticated
   useEffect(() => {
@@ -54,6 +111,9 @@ function LoginPage() {
   const handlePasswordAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!validate()) return
+
     setIsLoading(true)
 
     try {
@@ -68,7 +128,7 @@ function LoginPage() {
       await signIn("password", formData)
       // Navigation happens via useEffect when auth state updates
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed")
+      setError(mapAuthError(err, mode))
     } finally {
       setIsLoading(false)
     }
@@ -145,7 +205,7 @@ function LoginPage() {
         )}
 
         {/* Email/Password Form */}
-        <form onSubmit={handlePasswordAuth} className="space-y-4">
+        <form onSubmit={handlePasswordAuth} className="space-y-4" noValidate>
           {mode === "signUp" && (
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -154,9 +214,16 @@ function LoginPage() {
                 type="text"
                 placeholder="Your name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }))
+                }}
                 disabled={isLoading}
+                aria-invalid={!!fieldErrors.name}
               />
+              {fieldErrors.name && (
+                <p className="text-xs text-destructive">{fieldErrors.name}</p>
+              )}
             </div>
           )}
 
@@ -167,24 +234,47 @@ function LoginPage() {
               type="email"
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }))
+              }}
               disabled={isLoading}
+              aria-invalid={!!fieldErrors.email}
             />
+            {fieldErrors.email && (
+              <p className="text-xs text-destructive">{fieldErrors.email}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              minLength={8}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }))
+                }}
+                disabled={isLoading}
+                aria-invalid={!!fieldErrors.password}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {fieldErrors.password && (
+              <p className="text-xs text-destructive">{fieldErrors.password}</p>
+            )}
           </div>
 
           {error && (
@@ -204,7 +294,7 @@ function LoginPage() {
               Don't have an account?{" "}
               <button
                 type="button"
-                onClick={() => setMode("signUp")}
+                onClick={() => { setMode("signUp"); setError(null); setFieldErrors({}) }}
                 className="text-primary hover:underline font-medium"
               >
                 Sign up
@@ -215,7 +305,7 @@ function LoginPage() {
               Already have an account?{" "}
               <button
                 type="button"
-                onClick={() => setMode("signIn")}
+                onClick={() => { setMode("signIn"); setError(null); setFieldErrors({}) }}
                 className="text-primary hover:underline font-medium"
               >
                 Sign in
