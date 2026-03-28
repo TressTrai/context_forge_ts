@@ -355,9 +355,10 @@ export function BrainstormDialog({
     }
   }, [messages, streamingText, autoScroll])
 
-  // Focus input when dialog opens
+  // Scroll to bottom and focus input when dialog opens
   useEffect(() => {
     if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "instant" })
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [isOpen])
