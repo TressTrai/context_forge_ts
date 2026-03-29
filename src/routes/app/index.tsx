@@ -221,6 +221,7 @@ function BlockCard({
   metadata,
   refBlockId,
   contentHash,
+  sourceTemplateId,
 }: {
   id: Id<"blocks">
   content: string
@@ -243,6 +244,7 @@ function BlockCard({
   }
   refBlockId?: string
   contentHash?: string
+  sourceTemplateId?: string
 }) {
   const [showActions, setShowActions] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -253,10 +255,12 @@ function BlockCard({
   const createLinkedBlock = useMutation(api.blocks.createLinked)
   const { toast } = useToast()
 
-  // Duplicate detection for non-linked blocks
+  // Duplicate detection for non-linked blocks (skip if block came from a template)
   const duplicate = useQuery(
     api.blocks.findDuplicate,
-    contentHash && !refBlockId ? { contentHash, excludeSessionId: sessionId } : "skip"
+    contentHash && !refBlockId && !sourceTemplateId
+      ? { contentHash, excludeSessionId: sessionId }
+      : "skip"
   )
 
   // Delete confirmation
@@ -682,6 +686,7 @@ function ZoneColumn({
                   metadata={block.metadata ?? undefined}
                   refBlockId={block.refBlockId}
                   contentHash={block.contentHash}
+                  sourceTemplateId={block.sourceTemplateId}
                 />
               </SortableBlock>
             ))

@@ -230,6 +230,7 @@ export const createSession = mutation({
             createdAt: now,
             updatedAt: now,
             contentHash: computeContentHash(blockData.content),
+            sourceTemplateId: args.templateId,
           })
         }
 

@@ -384,6 +384,7 @@ export const startProject = mutation({
             createdAt: now,
             updatedAt: now,
             contentHash: computeContentHash(blockData.content),
+            sourceTemplateId: firstStep.templateId,
           })
         }
       }
@@ -535,6 +536,7 @@ export const advanceStep = mutation({
             updatedAt: now,
             metadata: blockData.metadata,
             contentHash: computeContentHash(blockData.content),
+            sourceTemplateId: nextStep.templateId,
           })
         }
       }

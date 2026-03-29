@@ -477,6 +477,7 @@ export const goToNextStep = mutation({
       .query("sessions")
       .withIndex("by_project", (q) => q.eq("projectId", session.projectId!))
       .collect()
+    const nextStep = workflow.steps[nextStepIndex]
     const existingNextSession = projectSessions.find(
       (s) => s.stepNumber === nextStepIndex
     )
@@ -487,7 +488,6 @@ export const goToNextStep = mutation({
     }
 
     // Create new session for the next step
-    const nextStep = workflow.steps[nextStepIndex]
     const now = Date.now()
     const userId = await getOptionalUserId(ctx)
 
@@ -585,6 +585,7 @@ export const goToNextStep = mutation({
             updatedAt: now,
             metadata: templateBlock.metadata,
             contentHash: computeContentHash(templateBlock.content),
+            sourceTemplateId: nextStep.templateId,
           })
         }
       }

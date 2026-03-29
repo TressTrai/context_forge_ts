@@ -185,6 +185,8 @@ export const findDuplicate = query({
       if (!session) continue
       // Only match blocks in sessions owned by the same user
       if (session.userId !== userId) continue
+      // Skip template-sourced blocks — identical content across sessions is expected
+      if (candidate.sourceTemplateId) continue
       return {
         blockId: candidate._id,
         sessionId: candidate.sessionId,
