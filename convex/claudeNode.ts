@@ -24,6 +24,7 @@ import {
   formatPromptForSDK,
   NO_TOOLS_SUFFIX,
   NO_SELF_TALK_SUFFIX,
+  VALIDATION_SUFFIX,
 } from "./lib/context"
 import { SelfTalkDetector } from "./lib/selfTalkDetector"
 import { getActiveSkillsContent } from "./lib/skills"
@@ -154,12 +155,14 @@ export const streamBrainstormMessage = action({
     preventSelfTalk: v.optional(v.boolean()), // Append anti-self-talk suffix
     activeSkillIds: v.optional(v.array(v.string())), // Ephemeral skill IDs to inject
     model: v.optional(v.string()), // Claude model override (e.g. "claude-sonnet-4-5-20250929")
+    validate: v.optional(v.boolean()), // Validate mode — includes criteria blocks + validation suffix
   },
   handler: async (ctx, args): Promise<void> => {
     const throttleMs = args.throttleMs ?? 100
     const startTime = Date.now()
     const disableAgentBehavior = args.disableAgentBehavior ?? true
     const preventSelfTalk = args.preventSelfTalk ?? true
+    const validate = args.validate ?? false
 
     // Check for existing Claude session (enables prompt caching on turn 2+)
     const session = await ctx.runQuery(internal.generations.getSessionInternal, {
@@ -196,6 +199,9 @@ export const streamBrainstormMessage = action({
     if (preventSelfTalk) {
       systemPrompt = (systemPrompt ?? "") + NO_SELF_TALK_SUFFIX
     }
+    if (validate) {
+      systemPrompt = (systemPrompt ?? "") + VALIDATION_SUFFIX
+    }
 
     let prompt: string
 
@@ -217,7 +223,8 @@ export const streamBrainstormMessage = action({
         blocks,
         args.conversationHistory,
         args.newMessage,
-        activeSkillsContent
+        activeSkillsContent,
+        validate
       )
       const nonSystemMessages = messages.filter((m) => m.role !== "system")
       prompt = formatPromptForSDK(nonSystemMessages)

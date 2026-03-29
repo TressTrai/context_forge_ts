@@ -13,6 +13,12 @@ export const NO_TOOLS_SUFFIX = `
 
 IMPORTANT: In this conversation you do NOT have access to tools, files, or code execution. Do NOT say "let me read that file" or "I'll search for that" - work only with information provided in this conversation.`
 
+export const VALIDATION_SUFFIX = `
+
+VALIDATION MODE: Evaluate the artifacts in this session against the criteria blocks included above.
+For each criterion — state PASS, PARTIAL, or FAIL with specific quotes from the artifacts.
+End with an overall verdict.`
+
 export interface ContextMessage {
   role: "system" | "user" | "assistant"
   content: string
@@ -137,7 +143,8 @@ export function assembleContextWithConversation(
   blocks: Block[],
   conversationHistory: ConversationMessage[],
   newMessage: string,
-  activeSkillsContent?: string
+  activeSkillsContent?: string,
+  validate = false
 ): ContextMessage[] {
   const messages: ContextMessage[] = []
 
@@ -150,6 +157,10 @@ export function assembleContextWithConversation(
 
   for (const block of blocks) {
     if (block.type === "system_prompt" || block.isDraft) {
+      continue
+    }
+    // Criteria blocks: excluded from brainstorm, included only in validate mode
+    if (block.type === "criteria" && !validate) {
       continue
     }
     const zone = block.zone as Zone

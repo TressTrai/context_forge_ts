@@ -244,6 +244,7 @@ export const startBrainstormGeneration = mutation({
     preventSelfTalk: v.optional(v.boolean()), // Append anti-self-talk suffix
     activeSkillIds: v.optional(v.array(v.string())), // Ephemeral skill IDs to inject
     model: v.optional(v.string()), // Claude model override
+    validate: v.optional(v.boolean()), // Validate mode — includes criteria blocks
   },
   handler: async (ctx, args) => {
     // Create generation record
@@ -268,6 +269,7 @@ export const startBrainstormGeneration = mutation({
       preventSelfTalk: args.preventSelfTalk ?? true, // Default to true
       activeSkillIds: args.activeSkillIds,
       model: args.model,
+      validate: args.validate,
     })
 
     return { generationId }

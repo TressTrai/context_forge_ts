@@ -9,6 +9,7 @@ import {
   extractSystemPromptFromBlocks,
   renderMemoryBlock,
   NO_TOOLS_SUFFIX,
+  VALIDATION_SUFFIX,
 } from "@/lib/llm/context"
 import { DEFAULT_ACTIVE_SKILLS, getActiveSkillsContent } from "@/lib/llm/skills"
 import { brainstorm as brainstormSettings } from "@/lib/llm/settings"
@@ -381,14 +382,14 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // Send message via Ollama (client-side streaming)
   const sendMessageOllama = useCallback(
-    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[], validate = false) => {
       if (!blocks) {
         throw new Error("Blocks not loaded yet")
       }
 
       // Assemble context with blocks, conversation, and active skills
       const skillsContent = getActiveSkillsContent(activeSkills)
-      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined)
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined, validate)
 
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
@@ -403,10 +404,10 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
       const ollamaMessages: ollamaClient.OllamaMessage[] = []
 
       // Add system prompt first if present
-      if (systemPrompt) {
+      if (systemPrompt || validate) {
         ollamaMessages.push({
           role: "system",
-          content: systemPrompt,
+          content: (systemPrompt ?? "") + (validate ? VALIDATION_SUFFIX : ""),
         })
       }
 
@@ -462,14 +463,14 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // Send message via OpenRouter (client-side streaming)
   const sendMessageOpenRouter = useCallback(
-    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[], validate = false) => {
       if (!blocks) {
         throw new Error("Blocks not loaded yet")
       }
 
       // Assemble context with blocks, conversation, and active skills
       const skillsContent = getActiveSkillsContent(activeSkills)
-      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined)
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined, validate)
 
       // Extract system prompt if present
       const systemPrompt = extractSystemPromptFromBlocks(blocks)
@@ -484,10 +485,10 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
       const openrouterMessages: openrouterClient.OpenRouterMessage[] = []
 
       // Add system prompt first if present (with no-tools suffix for consistency)
-      if (systemPrompt) {
+      if (systemPrompt || validate) {
         openrouterMessages.push({
           role: "system",
-          content: systemPrompt + NO_TOOLS_SUFFIX,
+          content: (systemPrompt ?? "") + NO_TOOLS_SUFFIX + (validate ? VALIDATION_SUFFIX : ""),
         })
       }
 
@@ -562,7 +563,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // Send message via Claude (Convex mutations - backend)
   const sendMessageClaude = useCallback(
-    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[], validate = false) => {
       // Collect active skill IDs to pass to backend
       const activeSkillIds = Object.entries(activeSkills)
         .filter(([, enabled]) => enabled)
@@ -576,6 +577,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         preventSelfTalk,
         activeSkillIds,
         model: model ?? undefined,
+        validate,
       })
       setGenerationId(result.generationId)
     },
@@ -584,8 +586,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // Send a new message (dispatches to correct provider)
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, options?: { validate?: boolean }) => {
       if (!content.trim() || isStreaming) return
+      const validate = options?.validate ?? false
 
       setError(null)
       setConversationRestored(false)
@@ -613,11 +616,11 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
       try {
         if (provider === "ollama") {
-          await sendMessageOllama(content.trim(), conversationHistory)
+          await sendMessageOllama(content.trim(), conversationHistory, validate)
         } else if (provider === "openrouter") {
-          await sendMessageOpenRouter(content.trim(), conversationHistory)
+          await sendMessageOpenRouter(content.trim(), conversationHistory, validate)
         } else {
-          await sendMessageClaude(content.trim(), conversationHistory)
+          await sendMessageClaude(content.trim(), conversationHistory, validate)
         }
       } catch (err) {
         // Ignore AbortError — user pressed stop, partial text already saved by stopStreaming
@@ -846,6 +849,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     availableMemoryTags: Array.from(
       new Set((memoryEntries ?? []).flatMap((e) => e.tags))
     ).sort(),
+
+    // Criteria blocks present (for enabling Validate button)
+    hasCriteria: (blocks ?? []).some((b) => b.type === "criteria" && !b.isDraft),
 
     // Error
     error,

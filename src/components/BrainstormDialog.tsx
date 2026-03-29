@@ -61,7 +61,8 @@ interface BrainstormDialogProps {
   streamingText: string
   provider: Provider
   onProviderChange: (provider: Provider) => void
-  onSendMessage: (content: string) => Promise<void>
+  onSendMessage: (content: string, options?: { validate?: boolean }) => Promise<void>
+  hasCriteria?: boolean
   onClearConversation: () => void
   onSaveMessage: (messageId: string, zone: Zone) => Promise<void>
   onRetryMessage: (messageId: string) => Promise<void>
@@ -359,6 +360,7 @@ export function BrainstormDialog({
   availableMemoryTags = [],
   systemPromptBlock: _systemPromptBlock,
   onSaveSystemPrompt: _onSaveSystemPrompt,
+  hasCriteria = false,
 }: BrainstormDialogProps) {
   const [inputValue, setInputValue] = useState("")
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null)
@@ -436,6 +438,13 @@ export function BrainstormDialog({
     const content = inputValue.trim()
     setInputValue("")
     await onSendMessage(content)
+  }, [inputValue, isStreaming, onSendMessage])
+
+  const handleValidate = useCallback(async () => {
+    if (isStreaming) return
+    const content = inputValue.trim() || "Validate the artifacts against the criteria."
+    setInputValue("")
+    await onSendMessage(content, { validate: true })
   }, [inputValue, isStreaming, onSendMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -579,8 +588,20 @@ export function BrainstormDialog({
               </Button>
             </div>
           </div>
-          {/* Row 2: Settings button */}
+          {/* Row 2: Settings + Validate buttons */}
           <div className="flex items-center gap-2">
+            {!isStreaming && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={handleValidate}
+                disabled={!isProviderAvailable || !hasCriteria}
+                title={hasCriteria ? "Run validation against criteria blocks" : "Add Criteria blocks to enable validation"}
+              >
+                Validate
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

@@ -19,6 +19,16 @@ export const NO_SELF_TALK_SUFFIX = `
 
 IMPORTANT: Generate ONLY your single assistant response. Do NOT simulate, generate, or continue with any user messages. Do NOT write "USER:" or pretend to be the user. Your response ends when your answer is complete — do not continue the conversation pattern.`
 
+/**
+ * Validation mode suffix — appended to system prompt when Validate is triggered.
+ * Instructs the LLM to evaluate artifacts against criteria blocks.
+ */
+export const VALIDATION_SUFFIX = `
+
+VALIDATION MODE: Evaluate the artifacts in this session against the criteria blocks included above.
+For each criterion — state PASS, PARTIAL, or FAIL with specific quotes from the artifacts.
+End with an overall verdict.`
+
 export interface ContextMessage {
   role: "system" | "user" | "assistant"
   content: string
@@ -64,7 +74,8 @@ export function extractSystemPromptFromBlocks(
  */
 export function assembleContext(
   blocks: Doc<"blocks">[],
-  userPrompt: string
+  userPrompt: string,
+  validate = false
 ): ContextMessage[] {
   const messages: ContextMessage[] = []
 
@@ -78,6 +89,10 @@ export function assembleContext(
   for (const block of blocks) {
     // Skip system_prompt blocks - caller extracts them via extractSystemPromptFromBlocks()
     if (block.type === "system_prompt" || block.isDraft) {
+      continue
+    }
+    // Criteria blocks: excluded from brainstorm, included only in validate mode
+    if (block.type === "criteria" && !validate) {
       continue
     }
     const zone = block.zone as Zone
@@ -185,7 +200,8 @@ export function assembleContextWithConversation(
   blocks: Doc<"blocks">[],
   conversationHistory: ConversationMessage[],
   newMessage: string,
-  activeSkillsContent?: string
+  activeSkillsContent?: string,
+  validate = false
 ): ContextMessage[] {
   const messages: ContextMessage[] = []
 
@@ -199,6 +215,10 @@ export function assembleContextWithConversation(
   for (const block of blocks) {
     // Skip system_prompt blocks - caller extracts them via extractSystemPromptFromBlocks()
     if (block.type === "system_prompt" || block.isDraft) {
+      continue
+    }
+    // Criteria blocks: excluded from brainstorm, included only in validate mode
+    if (block.type === "criteria" && !validate) {
       continue
     }
     const zone = block.zone as Zone

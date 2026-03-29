@@ -28,6 +28,8 @@ export const BLOCK_TYPES = [
   "persona",
   "framework",
   "skill",
+  // Validation
+  "criteria",
 ] as const
 
 export type BlockType = (typeof BLOCK_TYPES)[number]
@@ -166,6 +168,16 @@ export const BLOCK_TYPE_METADATA: Record<BlockType, BlockTypeMetadata> = {
     category: "skill",
     icon: "Puzzle",
     color: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
+  },
+
+  // Validation
+  criteria: {
+    displayName: "Criteria",
+    description: "Validation checklist — excluded from brainstorm, included when Validate is clicked",
+    defaultZone: "STABLE",
+    category: "core",
+    icon: "CheckSquare",
+    color: "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300",
   },
 }
 
