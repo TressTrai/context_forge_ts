@@ -23,7 +23,7 @@ async function promoteReferencesForSession(
   for (const block of sessionBlocks) {
     const refs = await ctx.db
       .query("blocks")
-      .filter((q) => q.eq(q.field("refBlockId"), block._id))
+      .withIndex("by_ref_block", (q) => q.eq("refBlockId", block._id))
       .collect()
     for (const ref of refs) {
       await ctx.db.patch(ref._id, {
@@ -57,30 +57,31 @@ async function cascadeDeleteSessions(
     await promoteReferencesForSession(ctx, sessionId)
   }
 
-  // Bulk fetch all related data (3 queries total, regardless of session count)
-  const allBlocks = await ctx.db.query("blocks").collect()
-  const allSnapshots = await ctx.db.query("snapshots").collect()
-  const allGenerations = await ctx.db.query("generations").collect()
-
-  // Filter and delete blocks
-  for (const block of allBlocks) {
-    if (sessionIds.has(block.sessionId)) {
+  // Delete related data per session using indexed queries
+  for (const sessionId of sessionIds) {
+    const blocks = await ctx.db
+      .query("blocks")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect()
+    for (const block of blocks) {
       await ctx.db.delete(block._id)
       deletedBlocks++
     }
-  }
 
-  // Filter and delete snapshots
-  for (const snapshot of allSnapshots) {
-    if (sessionIds.has(snapshot.sessionId)) {
+    const snapshots = await ctx.db
+      .query("snapshots")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect()
+    for (const snapshot of snapshots) {
       await ctx.db.delete(snapshot._id)
       deletedSnapshots++
     }
-  }
 
-  // Filter and delete generations
-  for (const generation of allGenerations) {
-    if (sessionIds.has(generation.sessionId)) {
+    const generations = await ctx.db
+      .query("generations")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect()
+    for (const generation of generations) {
       await ctx.db.delete(generation._id)
       deletedGenerations++
     }
@@ -481,8 +482,8 @@ export const goToNextStep = mutation({
     )
 
     if (existingNextSession) {
-      // Return existing session
-      return { sessionId: existingNextSession._id, created: false }
+      // Return existing session (no entry questions — already answered on first visit)
+      return { sessionId: existingNextSession._id, created: false, entryQuestions: [] as string[], stepName: nextStep.name }
     }
 
     // Create new session for the next step
@@ -595,6 +596,11 @@ export const goToNextStep = mutation({
       updatedAt: now,
     })
 
-    return { sessionId: newSessionId, created: true }
+    return {
+      sessionId: newSessionId,
+      created: true,
+      entryQuestions: nextStep.entryQuestions ?? [],
+      stepName: nextStep.name,
+    }
   },
 })

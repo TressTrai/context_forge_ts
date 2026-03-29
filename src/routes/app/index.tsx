@@ -32,6 +32,7 @@ import { CompressionDialog } from "@/components/compression/CompressionDialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DebouncedButton } from "@/components/ui/debounced-button"
 import { useToast } from "@/components/ui/toast"
+import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
 import { ImportSkillDialog } from "@/components/skills/ImportSkillDialog"
 import { ImportProjectConfirmDialog } from "@/components/skills/ImportProjectConfirmDialog"
 import { ExportSkillDialog } from "@/components/skills/ExportSkillDialog"
@@ -766,66 +767,120 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
   const { switchSession } = useSession()
   const workflowContext = useQuery(api.sessions.getWorkflowContext, { sessionId })
   const goToNextStep = useMutation(api.sessions.goToNextStep)
+  const createBlock = useMutation(api.blocks.create)
   const [isAdvancing, setIsAdvancing] = useState(false)
+  const [pendingEntry, setPendingEntry] = useState<{
+    sessionId: Id<"sessions">
+    stepName: string
+    questions: string[]
+  } | null>(null)
 
   // Don't render if not part of a workflow
   if (!workflowContext) return null
+
+  const openSession = (nextSessionId: Id<"sessions">) => {
+    localStorage.setItem("contextforge-session-id", nextSessionId)
+    switchSession(nextSessionId)
+    navigate({ to: "/app" })
+  }
 
   const handleNextStep = async () => {
     setIsAdvancing(true)
     try {
       const result = await goToNextStep({ sessionId })
-      // Update localStorage synchronously (same fix as in SessionContext)
-      localStorage.setItem("contextforge-session-id", result.sessionId)
-      switchSession(result.sessionId)
-      // Force a re-render by navigating to the same page
-      navigate({ to: "/app" })
+      if ((result.entryQuestions ?? []).length > 0) {
+        setPendingEntry({
+          sessionId: result.sessionId,
+          stepName: result.stepName ?? "Next Step",
+          questions: result.entryQuestions,
+        })
+      } else {
+        openSession(result.sessionId)
+      }
     } finally {
       setIsAdvancing(false)
     }
   }
 
+  const handleEntrySubmit = async (answers: Record<string, string>) => {
+    if (!pendingEntry) return
+    const { questions } = pendingEntry
+    const lines = questions
+      .filter((q) => answers[q]?.trim())
+      .map((q) => `**${q}**\n${answers[q].trim()}`)
+    if (lines.length > 0) {
+      await createBlock({
+        sessionId: pendingEntry.sessionId,
+        content: lines.join("\n\n"),
+        type: "context",
+        zone: "WORKING",
+      })
+    }
+    const nextSessionId = pendingEntry.sessionId
+    setPendingEntry(null)
+    openSession(nextSessionId)
+  }
+
+  const handleEntrySkip = () => {
+    if (!pendingEntry) return
+    const nextSessionId = pendingEntry.sessionId
+    setPendingEntry(null)
+    openSession(nextSessionId)
+  }
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50 border border-border text-xs">
-      {/* Workflow name and step progress */}
-      <Link
-        to="/app/projects/$projectId"
-        params={{ projectId: workflowContext.projectId }}
-        className="text-muted-foreground hover:text-foreground"
-      >
-        {workflowContext.workflowName}
-      </Link>
-      <span className="text-muted-foreground">·</span>
-      <span className="font-medium">
-        Step {workflowContext.currentStepIndex + 1}/{workflowContext.totalSteps}
-      </span>
-      <span className="text-muted-foreground">·</span>
-      <span>{workflowContext.currentStepName}</span>
+    <>
+      <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50 border border-border text-xs">
+        {/* Workflow name and step progress */}
+        <Link
+          to="/app/projects/$projectId"
+          params={{ projectId: workflowContext.projectId }}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          {workflowContext.workflowName}
+        </Link>
+        <span className="text-muted-foreground">·</span>
+        <span className="font-medium">
+          Step {workflowContext.currentStepIndex + 1}/{workflowContext.totalSteps}
+        </span>
+        <span className="text-muted-foreground">·</span>
+        <span>{workflowContext.currentStepName}</span>
 
-      {/* Next step button */}
-      {workflowContext.hasNextStep && (
-        <>
-          <span className="text-muted-foreground">·</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleNextStep}
-            disabled={isAdvancing}
-            className="h-5 px-2 text-xs"
-          >
-            {isAdvancing ? "..." : `Next: ${workflowContext.nextStepName} →`}
-          </Button>
-        </>
-      )}
+        {/* Next step button */}
+        {workflowContext.hasNextStep && (
+          <>
+            <span className="text-muted-foreground">·</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNextStep}
+              disabled={isAdvancing}
+              className="h-5 px-2 text-xs"
+            >
+              {isAdvancing ? "..." : `Next: ${workflowContext.nextStepName} →`}
+            </Button>
+          </>
+        )}
 
-      {/* Completed indicator */}
-      {!workflowContext.hasNextStep && (
-        <>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-green-600 dark:text-green-400">✓ Final step</span>
-        </>
+        {/* Completed indicator */}
+        {!workflowContext.hasNextStep && (
+          <>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-green-600 dark:text-green-400">✓ Final step</span>
+          </>
+        )}
+      </div>
+
+      {pendingEntry && (
+        <EntryQuestionsDialog
+          isOpen={true}
+          stepName={pendingEntry.stepName}
+          questions={pendingEntry.questions}
+          onSubmit={handleEntrySubmit}
+          onSkip={handleEntrySkip}
+        />
       )}
-    </div>
+    </>
   )
 }
 

@@ -163,6 +163,7 @@ export const addStep = mutation({
     description: v.optional(v.string()),
     templateId: v.optional(v.id("templates")),
     carryForwardZones: v.optional(zoneArray),
+    entryQuestions: v.optional(v.array(v.string())),
     position: v.optional(v.number()), // Insert at position (default: end)
   },
   handler: async (ctx, args) => {
@@ -181,6 +182,7 @@ export const addStep = mutation({
       description: args.description,
       templateId: args.templateId,
       carryForwardZones: args.carryForwardZones,
+      entryQuestions: args.entryQuestions,
     }
 
     const steps = [...workflow.steps]
@@ -207,6 +209,7 @@ export const updateStep = mutation({
     description: v.optional(v.string()),
     templateId: v.optional(v.id("templates")),
     carryForwardZones: v.optional(zoneArray),
+    entryQuestions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const hasAccess = await canAccessWorkflow(ctx, args.workflowId)
@@ -230,6 +233,7 @@ export const updateStep = mutation({
     if (args.description !== undefined) step.description = args.description
     if (args.templateId !== undefined) step.templateId = args.templateId
     if (args.carryForwardZones !== undefined) step.carryForwardZones = args.carryForwardZones
+    if (args.entryQuestions !== undefined) step.entryQuestions = args.entryQuestions
 
     steps[args.stepIndex] = step
 
@@ -385,7 +389,11 @@ export const startProject = mutation({
       }
     }
 
-    return { projectId, sessionId }
+    return {
+      projectId,
+      sessionId,
+      entryQuestions: firstStep.entryQuestions ?? [],
+    }
   },
 })
 
@@ -538,7 +546,11 @@ export const advanceStep = mutation({
       updatedAt: now,
     })
 
-    return { sessionId, stepIndex: nextStepIndex }
+    return {
+      sessionId,
+      stepIndex: nextStepIndex,
+      entryQuestions: nextStep.entryQuestions ?? [],
+    }
   },
 })
 

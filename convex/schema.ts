@@ -108,6 +108,7 @@ export default defineSchema({
         carryForwardZones: v.optional(
           v.array(v.union(v.literal("PERMANENT"), v.literal("STABLE"), v.literal("WORKING")))
         ),
+        entryQuestions: v.optional(v.array(v.string())),
       })
     ),
     createdAt: v.number(),
@@ -150,7 +151,8 @@ export default defineSchema({
     .index("by_zone", ["zone", "position"]) // Legacy index
     .index("by_session", ["sessionId"])
     .index("by_session_zone", ["sessionId", "zone", "position"])
-    .index("by_content_hash", ["contentHash"]),
+    .index("by_content_hash", ["contentHash"])
+    .index("by_ref_block", ["refBlockId"]),
 
   // Memory type definitions per project
   memorySchemas: defineTable({

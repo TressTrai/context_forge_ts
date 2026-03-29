@@ -340,7 +340,7 @@ export function BrainstormDialog({
   onEditMessage,
   error,
   providerHealth,
-  systemPrompt,
+  systemPrompt: _systemPrompt,
   disableAgentBehavior = true,
   onDisableAgentBehaviorChange,
   preventSelfTalk = true,
@@ -357,12 +357,11 @@ export function BrainstormDialog({
   sessionTags,
   onUpdateSessionTags,
   availableMemoryTags = [],
-  systemPromptBlock,
-  onSaveSystemPrompt,
+  systemPromptBlock: _systemPromptBlock,
+  onSaveSystemPrompt: _onSaveSystemPrompt,
 }: BrainstormDialogProps) {
   const [inputValue, setInputValue] = useState("")
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null)
-  const [isEditingTags, setIsEditingTags] = useState(false)
   const [optimisticTags, setOptimisticTags] = useState<string[] | null>(null)
 
   // Keep optimistic state in sync when server value changes (e.g. after save)
@@ -370,8 +369,6 @@ export function BrainstormDialog({
     setOptimisticTags(null)
   }, [sessionTags])
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [systemPromptInput, setSystemPromptInput] = useState("")
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -588,12 +585,7 @@ export function BrainstormDialog({
               variant="ghost"
               size="sm"
               className={cn("h-6 px-2 text-xs ml-auto", showAdvanced && "bg-accent")}
-              onClick={() => {
-                if (!showAdvanced && systemPromptBlock) {
-                  setSystemPromptInput(systemPromptBlock.content)
-                }
-                setShowAdvanced(!showAdvanced)
-              }}
+              onClick={() => setShowAdvanced(!showAdvanced)}
             >
               Settings {showAdvanced ? "▲" : "▼"}
             </Button>
