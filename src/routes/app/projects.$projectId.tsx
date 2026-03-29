@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { useSession } from "@/contexts/SessionContext"
+import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
 import type { Id, Doc } from "../../../convex/_generated/dataModel"
 
 // Format relative time
@@ -271,10 +272,16 @@ function ProjectDashboard() {
   const project = useQuery(api.projects.get, { id: projectId as Id<"projects"> })
   const removeSession = useMutation(api.projects.removeSession)
   const advanceStep = useMutation(api.workflows.advanceStep)
+  const createBlock = useMutation(api.blocks.create)
 
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showCreateSession, setShowCreateSession] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
+  const [pendingEntry, setPendingEntry] = useState<{
+    sessionId: Id<"sessions">
+    stepName: string
+    questions: string[]
+  } | null>(null)
 
   const handleOpenSession = (sessionId: Id<"sessions">) => {
     switchSession(sessionId)
@@ -288,7 +295,6 @@ function ProjectDashboard() {
   const handleAdvanceStep = async () => {
     if (!project || !project.workflow) return
 
-    // Find the current step's session
     const currentStepSession = project.sessions.find(
       (s) => s.stepNumber === project.currentStep
     )
@@ -300,11 +306,46 @@ function ProjectDashboard() {
         projectId: project._id,
         previousSessionId: currentStepSession._id,
       })
-      // Open the new session
-      handleOpenSession(result.sessionId)
+
+      if ((result.entryQuestions ?? []).length > 0) {
+        const nextStep = project.workflow.steps[result.stepIndex]
+        setPendingEntry({
+          sessionId: result.sessionId,
+          stepName: nextStep?.name ?? "Next Step",
+          questions: result.entryQuestions,
+        })
+      } else {
+        handleOpenSession(result.sessionId)
+      }
     } finally {
       setIsAdvancing(false)
     }
+  }
+
+  const handleEntrySubmit = async (answers: Record<string, string>) => {
+    if (!pendingEntry) return
+    const { sessionId, questions } = pendingEntry
+    const lines = questions
+      .filter((q) => answers[q]?.trim())
+      .map((q) => `**${q}**\n${answers[q].trim()}`)
+    if (lines.length > 0) {
+      await createBlock({
+        sessionId,
+        content: lines.join("\n\n"),
+        type: "context",
+        zone: "WORKING",
+      })
+    }
+
+    setPendingEntry(null)
+    handleOpenSession(sessionId)
+  }
+
+  const handleEntrySkip = () => {
+    if (!pendingEntry) return
+    const { sessionId } = pendingEntry
+    setPendingEntry(null)
+    handleOpenSession(sessionId)
   }
 
   if (project === undefined) {
@@ -457,6 +498,16 @@ function ProjectDashboard() {
         onClose={() => setShowCreateSession(false)}
         onCreated={handleOpenSession}
       />
+
+      {pendingEntry && (
+        <EntryQuestionsDialog
+          isOpen={true}
+          stepName={pendingEntry.stepName}
+          questions={pendingEntry.questions}
+          onSubmit={handleEntrySubmit}
+          onSkip={handleEntrySkip}
+        />
+      )}
     </div>
   )
 }

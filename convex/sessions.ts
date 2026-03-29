@@ -478,8 +478,8 @@ export const goToNextStep = mutation({
     )
 
     if (existingNextSession) {
-      // Return existing session
-      return { sessionId: existingNextSession._id, created: false }
+      // Return existing session (no entry questions — already answered on first visit)
+      return { sessionId: existingNextSession._id, created: false, entryQuestions: [] as string[], stepName: nextStep.name }
     }
 
     // Create new session for the next step
@@ -594,6 +594,11 @@ export const goToNextStep = mutation({
       updatedAt: now,
     })
 
-    return { sessionId: newSessionId, created: true }
+    return {
+      sessionId: newSessionId,
+      created: true,
+      entryQuestions: nextStep.entryQuestions ?? [],
+      stepName: nextStep.name,
+    }
   },
 })
