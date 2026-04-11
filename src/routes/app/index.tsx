@@ -812,6 +812,7 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
   const [pendingEntry, setPendingEntry] = useState<{
     sessionId: Id<"sessions">
     stepName: string
+    stepDescription?: string
     questions: string[]
   } | null>(null)
 
@@ -832,6 +833,7 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
         setPendingEntry({
           sessionId: result.sessionId,
           stepName: result.stepName ?? "Next Step",
+          stepDescription: result.stepDescription,
           questions: result.entryQuestions,
         })
       } else {
@@ -842,17 +844,18 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
     }
   }
 
-  const handleEntrySubmit = async (answers: Record<string, string>) => {
+  const handleEntrySubmit = async (answers: Record<number, string>) => {
     if (!pendingEntry) return
     const { questions } = pendingEntry
     const lines = questions
-      .filter((q) => answers[q]?.trim())
-      .map((q) => `**${q}**\n${answers[q].trim()}`)
+      .map((q, i) => ({ q, a: answers[i]?.trim() }))
+      .filter(({ a }) => a)
+      .map(({ q, a }) => `**${q}**\n${a}`)
     if (lines.length > 0) {
       await createBlock({
         sessionId: pendingEntry.sessionId,
         content: lines.join("\n\n"),
-        type: "context",
+        type: "entry_brief",
         zone: "WORKING",
       })
     }
@@ -915,6 +918,7 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
         <EntryQuestionsDialog
           isOpen={true}
           stepName={pendingEntry.stepName}
+          stepDescription={pendingEntry.stepDescription}
           questions={pendingEntry.questions}
           onSubmit={handleEntrySubmit}
           onSkip={handleEntrySkip}

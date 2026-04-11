@@ -113,7 +113,7 @@ function StartWorkflowDialog({
   workflow: Doc<"workflows">
   isOpen: boolean
   onClose: () => void
-  onStarted: (projectId: Id<"projects">, sessionId: Id<"sessions">, entryQuestions: string[], stepName: string) => void
+  onStarted: (projectId: Id<"projects">, sessionId: Id<"sessions">, entryQuestions: string[], stepName: string, stepDescription?: string) => void
 }) {
   const [projectName, setProjectName] = useState("")
   const [projectDescription, setProjectDescription] = useState("")
@@ -133,7 +133,7 @@ function StartWorkflowDialog({
       setProjectName("")
       setProjectDescription("")
       onClose()
-      onStarted(result.projectId, result.sessionId, result.entryQuestions, workflow.steps[0]?.name ?? "Step 1")
+      onStarted(result.projectId, result.sessionId, result.entryQuestions, workflow.steps[0]?.name ?? "Step 1", workflow.steps[0]?.description)
     } finally {
       setIsLoading(false)
     }
@@ -359,6 +359,7 @@ function WorkflowsIndexPage() {
     projectId: Id<"projects">
     sessionId: Id<"sessions">
     stepName: string
+    stepDescription?: string
     questions: string[]
   } | null>(null)
 
@@ -387,26 +388,28 @@ function WorkflowsIndexPage() {
     projectId: Id<"projects">,
     sessionId: Id<"sessions">,
     entryQuestions: string[],
-    stepName: string
+    stepName: string,
+    stepDescription?: string
   ) => {
     if (entryQuestions.length > 0) {
-      setPendingEntry({ projectId, sessionId, stepName, questions: entryQuestions })
+      setPendingEntry({ projectId, sessionId, stepName, stepDescription, questions: entryQuestions })
     } else {
       navigate({ to: "/app/projects/$projectId", params: { projectId } })
     }
   }
 
-  const handleEntrySubmit = async (answers: Record<string, string>) => {
+  const handleEntrySubmit = async (answers: Record<number, string>) => {
     if (!pendingEntry) return
     const { projectId, sessionId, questions } = pendingEntry
     const lines = questions
-      .filter((q) => answers[q]?.trim())
-      .map((q) => `**${q}**\n${answers[q].trim()}`)
+      .map((q, i) => ({ q, a: answers[i]?.trim() }))
+      .filter(({ a }) => a)
+      .map(({ q, a }) => `**${q}**\n${a}`)
     if (lines.length > 0) {
       await createBlock({
         sessionId,
         content: lines.join("\n\n"),
-        type: "context",
+        type: "entry_brief",
         zone: "WORKING",
       })
     }
@@ -481,6 +484,7 @@ function WorkflowsIndexPage() {
         <EntryQuestionsDialog
           isOpen={true}
           stepName={pendingEntry.stepName}
+          stepDescription={pendingEntry.stepDescription}
           questions={pendingEntry.questions}
           onSubmit={handleEntrySubmit}
           onSkip={handleEntrySkip}

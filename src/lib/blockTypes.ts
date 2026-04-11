@@ -24,6 +24,7 @@ export const BLOCK_TYPES = [
   "user_message",
   "assistant_message",
   "instruction",
+  "entry_brief",
   // Meta Types
   "persona",
   "framework",
@@ -139,6 +140,14 @@ export const BLOCK_TYPE_METADATA: Record<BlockType, BlockTypeMetadata> = {
     icon: "ListChecks",
     color: "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300",
   },
+  entry_brief: {
+    displayName: "Entry Brief",
+    description: "Answers to entry questions collected at workflow step start",
+    defaultZone: "WORKING",
+    category: "conversation",
+    icon: "ClipboardList",
+    color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300",
+  },
 
   // Meta Types
   persona: {
@@ -180,7 +189,6 @@ export function getBlockTypesByCategory(): Record<string, BlockType[]> {
     meta: [],
     skill: [],
   }
-
   for (const type of BLOCK_TYPES) {
     const meta = BLOCK_TYPE_METADATA[type]
     categories[meta.category].push(type)

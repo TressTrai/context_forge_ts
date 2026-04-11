@@ -284,7 +284,7 @@ function StepDialog({
                     }
                   }
                 }}
-                placeholder="What should players FEEL?"
+                placeholder="Enter a question for this step..."
                 className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
               <Button

@@ -58,7 +58,7 @@ function CreateProjectDialog({
         })
         reset()
         onClose()
-        onStarted(result.projectId, result.sessionId, result.entryQuestions, wf?.steps[0]?.name ?? "Step 1")
+        onStarted(result.projectId, result.sessionId, result.entryQuestions, wf?.steps[0]?.name ?? "Step 1", wf?.steps[0]?.description)
       } else {
         const result = await createProject({
           name: name.trim(),
@@ -250,6 +250,7 @@ function ProjectsIndexPage() {
     projectId: Id<"projects">
     sessionId: Id<"sessions">
     stepName: string
+    stepDescription?: string
     questions: string[]
   } | null>(null)
 
@@ -261,26 +262,28 @@ function ProjectsIndexPage() {
     projectId: Id<"projects">,
     sessionId: Id<"sessions"> | null,
     entryQuestions: string[],
-    stepName: string
+    stepName: string,
+    stepDescription?: string
   ) => {
     if (sessionId && entryQuestions.length > 0) {
-      setPendingEntry({ projectId, sessionId, stepName, questions: entryQuestions })
+      setPendingEntry({ projectId, sessionId, stepName, stepDescription, questions: entryQuestions })
     } else {
       navigate({ to: "/app/projects/$projectId", params: { projectId } })
     }
   }
 
-  const handleEntrySubmit = async (answers: Record<string, string>) => {
+  const handleEntrySubmit = async (answers: Record<number, string>) => {
     if (!pendingEntry) return
     const { projectId, sessionId, questions } = pendingEntry
     const lines = questions
-      .filter((q) => answers[q]?.trim())
-      .map((q) => `**${q}**\n${answers[q].trim()}`)
+      .map((q, i) => ({ q, a: answers[i]?.trim() }))
+      .filter(({ a }) => a)
+      .map(({ q, a }) => `**${q}**\n${a}`)
     if (lines.length > 0) {
       await createBlock({
         sessionId,
         content: lines.join("\n\n"),
-        type: "context",
+        type: "entry_brief",
         zone: "WORKING",
       })
     }
@@ -343,6 +346,7 @@ function ProjectsIndexPage() {
         <EntryQuestionsDialog
           isOpen={true}
           stepName={pendingEntry.stepName}
+          stepDescription={pendingEntry.stepDescription}
           questions={pendingEntry.questions}
           onSubmit={handleEntrySubmit}
           onSkip={handleEntrySkip}
