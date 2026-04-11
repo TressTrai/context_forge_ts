@@ -856,7 +856,7 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
         sessionId: pendingEntry.sessionId,
         content: lines.join("\n\n"),
         type: "entry_brief",
-        zone: "WORKING",
+        zone: "STABLE",
       })
     }
     const nextSessionId = pendingEntry.sessionId

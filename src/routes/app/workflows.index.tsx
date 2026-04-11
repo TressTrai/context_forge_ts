@@ -410,7 +410,7 @@ function WorkflowsIndexPage() {
         sessionId,
         content: lines.join("\n\n"),
         type: "entry_brief",
-        zone: "WORKING",
+        zone: "STABLE",
       })
     }
     setPendingEntry(null)

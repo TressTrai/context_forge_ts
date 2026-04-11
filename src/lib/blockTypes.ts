@@ -143,7 +143,7 @@ export const BLOCK_TYPE_METADATA: Record<BlockType, BlockTypeMetadata> = {
   entry_brief: {
     displayName: "Entry Brief",
     description: "Answers to entry questions collected at workflow step start",
-    defaultZone: "WORKING",
+    defaultZone: "STABLE",
     category: "conversation",
     icon: "ClipboardList",
     color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300",

@@ -72,7 +72,9 @@ Answer 1
 Answer 2
 ```
 
-The block is created with type `entry_brief` in the `WORKING` zone. Questions left blank are skipped. If all questions are skipped, no block is created.
+The block is created with type `entry_brief` in the `STABLE` zone. Questions left blank are skipped. If all questions are skipped, no block is created.
+
+Using STABLE (not WORKING) is intentional: entry briefs are step-specific intake context, not output artifacts. Since `carryForwardZones` typically carries only `WORKING`, entry briefs stay in the step they were collected for and do not pollute the next step's context.
 
 The user can press "Skip" to dismiss the dialog without creating a block and open the session as normal.
 
