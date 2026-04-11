@@ -253,6 +253,7 @@ export default defineSchema({
       carryForwardZones: v.optional(v.array(v.union(
         v.literal("PERMANENT"), v.literal("STABLE"), v.literal("WORKING")
       ))),
+      entryQuestions: v.optional(v.array(v.string())),
     }))),
     importCount: v.number(),
     searchText: v.string(),

@@ -1,6 +1,6 @@
 # Entry Questions
 
-Entry Questions are a list of predefined questions attached to a specific workflow step. When a user enters a step — either by creating a project from a workflow or advancing to the next step — a dialog appears with these questions. The answers are saved as a single block in the WORKING zone.
+Entry Questions are a list of predefined questions attached to a specific workflow step. When a user enters a step — either by creating a project from a workflow or advancing to the next step — a dialog appears with these questions. The answers are saved as a single block of type `entry_brief` in the WORKING zone.
 
 ## Why this exists
 
@@ -28,12 +28,13 @@ Action RPG
 
 ## Data structure
 
-Entry Questions are stored directly on the step object inside the workflow:
+Entry Questions are stored directly on the step object inside the workflow. Each step also has an optional `description` shown in the dialog:
 
 ```ts
 // convex/schema.ts
 steps: v.array(v.object({
   name: v.string(),
+  description: v.optional(v.string()),          // shown in dialog header
   templateId: v.optional(v.id("templates")),
   carryForwardZones: v.optional(v.array(...)),
   entryQuestions: v.optional(v.array(v.string())),  // ← here
@@ -57,7 +58,7 @@ The `EntryQuestionsDialog` component (`src/components/EntryQuestionsDialog.tsx`)
 | Advancing to the next step from the project page | `api.workflows.advanceStep` | `src/routes/app/projects.$projectId.tsx` |
 | Advancing to the next step from the main screen | `api.sessions.goToNextStep` | `src/routes/app/index.tsx` |
 
-All mutations return `entryQuestions: string[]`. If the array is non-empty, the dialog is shown; otherwise the session opens immediately.
+All mutations return `entryQuestions: string[]` and `stepDescription?: string`. If `entryQuestions` is non-empty, the dialog is shown; otherwise the session opens immediately.
 
 ### Saving answers
 
@@ -71,7 +72,7 @@ Answer 1
 Answer 2
 ```
 
-The block is created with type `context` in the `WORKING` zone. Questions left blank are skipped. If all questions are skipped, no block is created.
+The block is created with type `entry_brief` in the `WORKING` zone. Questions left blank are skipped. If all questions are skipped, no block is created.
 
 The user can press "Skip" to dismiss the dialog without creating a block and open the session as normal.
 
@@ -82,8 +83,24 @@ The user can press "Skip" to dismiss the dialog without creating a block and ope
 Props:
 - `isOpen: boolean`
 - `stepName: string` — displayed in the dialog header
+- `stepDescription?: string` — optional step description shown below the header
 - `questions: string[]` — list of questions
-- `onSubmit: (answers: Record<string, string>) => Promise<void>`
+- `onSubmit: (answers: Record<number, string>) => Promise<void>` — answers keyed by question index
 - `onSkip: () => void`
 
+Answers are tracked by **index** (not by question text), so steps with duplicate question strings work correctly — each field has its own independent state.
+
 Shows an answered-count indicator and "Save to Context" / "Skip" buttons.
+
+## Marketplace
+
+When a workflow is published to the marketplace, `entryQuestions` are included in the stored `workflowSteps` snapshot. When another user imports the workflow, their copy receives the same questions.
+
+The full round-trip is:
+
+| Stage | Location |
+|---|---|
+| Publish / Update | `api.marketplace.publish` — maps `s.entryQuestions` into `workflowSteps` |
+| Import | `api.marketplace.importWorkflow` — restores `step.entryQuestions` onto each workflow step |
+
+The `marketplace` schema (`convex/schema.ts`, `workflowSteps` array) also declares `entryQuestions: v.optional(v.array(v.string()))` so the field is stored correctly.
