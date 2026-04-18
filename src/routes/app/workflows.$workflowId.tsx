@@ -104,12 +104,14 @@ function StepDialog({
     description?: string
     templateId?: Id<"templates">
     carryForwardZones?: Zone[]
+    entryQuestions?: string[]
   }
   onSave: (step: {
     name: string
     description?: string
     templateId?: Id<"templates">
     carryForwardZones?: Zone[]
+    entryQuestions?: string[]
   }) => Promise<void>
 }) {
   const [name, setName] = useState(existingStep?.name ?? "")
@@ -120,6 +122,10 @@ function StepDialog({
   const [carryForward, setCarryForward] = useState<Zone[]>(
     existingStep?.carryForwardZones ?? []
   )
+  const [entryQuestions, setEntryQuestions] = useState<string[]>(
+    existingStep?.entryQuestions ?? []
+  )
+  const [newQuestion, setNewQuestion] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   const templates = useQuery(api.templates.list)
@@ -133,11 +139,14 @@ function StepDialog({
         description: description.trim() || undefined,
         templateId: templateId || undefined,
         carryForwardZones: carryForward.length > 0 ? carryForward : undefined,
+        entryQuestions: entryQuestions.length > 0 ? entryQuestions : undefined,
       })
       setName("")
       setDescription("")
       setTemplateId("")
       setCarryForward([])
+      setEntryQuestions([])
+      setNewQuestion("")
       onClose()
     } finally {
       setIsLoading(false)
@@ -242,6 +251,63 @@ function StepDialog({
             </p>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Entry Questions
+            </label>
+            <div className="space-y-1.5 mb-2">
+              {entryQuestions.map((q, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-sm flex-1 bg-muted rounded px-2 py-1 truncate">{q}</span>
+                  <button
+                    type="button"
+                    onClick={() => setEntryQuestions(entryQuestions.filter((_, j) => j !== i))}
+                    className="text-muted-foreground hover:text-destructive text-xs shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    const q = newQuestion.trim()
+                    if (q) {
+                      setEntryQuestions([...entryQuestions, q])
+                      setNewQuestion("")
+                    }
+                  }
+                }}
+                placeholder="Enter a question for this step..."
+                className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const q = newQuestion.trim()
+                  if (q) {
+                    setEntryQuestions([...entryQuestions, q])
+                    setNewQuestion("")
+                  }
+                }}
+                disabled={!newQuestion.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Shown when entering this step. Answers are saved as a STABLE entry_brief block.
+            </p>
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
@@ -271,6 +337,7 @@ function StepCard({
     description?: string
     templateId?: Id<"templates">
     carryForwardZones?: Zone[]
+    entryQuestions?: string[]
     template?: Doc<"templates"> | null
   }
   index: number
@@ -333,6 +400,11 @@ function StepCard({
                 Carries: {step.carryForwardZones.join(", ")}
               </span>
             )}
+            {step.entryQuestions && step.entryQuestions.length > 0 && (
+              <span className="text-xs px-2 py-1 rounded-md bg-muted">
+                {step.entryQuestions.length} entry question{step.entryQuestions.length > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
 
           <div className="mt-3 flex gap-2">
@@ -390,6 +462,7 @@ function WorkflowEditor() {
     description?: string
     templateId?: Id<"templates">
     carryForwardZones?: Zone[]
+    entryQuestions?: string[]
   }) => {
     await addStep({
       workflowId: workflowId as Id<"workflows">,
@@ -397,6 +470,7 @@ function WorkflowEditor() {
       description: step.description,
       templateId: step.templateId,
       carryForwardZones: step.carryForwardZones,
+      entryQuestions: step.entryQuestions,
     })
   }
 
@@ -407,6 +481,7 @@ function WorkflowEditor() {
       description?: string
       templateId?: Id<"templates">
       carryForwardZones?: Zone[]
+      entryQuestions?: string[]
     }
   ) => {
     await updateStep({
@@ -416,6 +491,7 @@ function WorkflowEditor() {
       description: step.description,
       templateId: step.templateId,
       carryForwardZones: step.carryForwardZones,
+      entryQuestions: step.entryQuestions,
     })
   }
 

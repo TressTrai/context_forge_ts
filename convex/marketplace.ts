@@ -122,6 +122,7 @@ export const publishWorkflow = mutation({
       name: s.name,
       description: s.description,
       carryForwardZones: s.carryForwardZones,
+      entryQuestions: s.entryQuestions,
     }))
 
     const now = Date.now()
@@ -213,7 +214,7 @@ export const update = mutation({
       const source = workflows.find((w) => w.publishedMarketplaceId === args.id)
       if (source) {
         updates.workflowSteps = source.steps.map((s) => ({
-          name: s.name, description: s.description, carryForwardZones: s.carryForwardZones,
+          name: s.name, description: s.description, carryForwardZones: s.carryForwardZones, entryQuestions: s.entryQuestions,
         }))
 
         // Delete old marketplaceBlocks and re-create
@@ -405,6 +406,7 @@ export const importWorkflow = mutation({
         name: step.name,
         description: step.description,
         carryForwardZones: step.carryForwardZones,
+        entryQuestions: step.entryQuestions,
         templateId: stepTemplateMap.get(i),
       })),
       sourceMarketplaceId: args.id,

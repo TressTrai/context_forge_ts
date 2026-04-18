@@ -477,13 +477,14 @@ export const goToNextStep = mutation({
       (s) => s.stepNumber === nextStepIndex
     )
 
+    const nextStep = workflow.steps[nextStepIndex]
+
     if (existingNextSession) {
-      // Return existing session
-      return { sessionId: existingNextSession._id, created: false }
+      // Return existing session (no entry questions — already answered on first visit)
+      return { sessionId: existingNextSession._id, created: false, entryQuestions: [] as string[], stepName: nextStep.name, stepDescription: nextStep.description }
     }
 
     // Create new session for the next step
-    const nextStep = workflow.steps[nextStepIndex]
     const now = Date.now()
     const userId = await getOptionalUserId(ctx)
 
@@ -594,6 +595,12 @@ export const goToNextStep = mutation({
       updatedAt: now,
     })
 
-    return { sessionId: newSessionId, created: true }
+    return {
+      sessionId: newSessionId,
+      created: true,
+      entryQuestions: nextStep.entryQuestions ?? [],
+      stepName: nextStep.name,
+      stepDescription: nextStep.description,
+    }
   },
 })

@@ -7,6 +7,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
+import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
 import type { Id } from "../../../convex/_generated/dataModel"
 
 // Format relative time
@@ -23,9 +24,11 @@ function formatTimeAgo(timestamp: number): string {
 function CreateProjectDialog({
   isOpen,
   onClose,
+  onStarted,
 }: {
   isOpen: boolean
   onClose: () => void
+  onStarted: (projectId: Id<"projects">, sessionId: Id<"sessions"> | null, entryQuestions: string[], stepName: string) => void
 }) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -35,32 +38,35 @@ function CreateProjectDialog({
   const createProject = useMutation(api.projects.create)
   const startProject = useMutation(api.workflows.startProject)
   const workflows = useQuery(api.workflows.list)
-  const navigate = useNavigate()
+
+  const reset = () => {
+    setName("")
+    setDescription("")
+    setSelectedWorkflowId("")
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     try {
       if (selectedWorkflowId) {
+        const wf = workflows?.find((w) => w._id === selectedWorkflowId)
         const result = await startProject({
           workflowId: selectedWorkflowId as Id<"workflows">,
           projectName: name.trim(),
           projectDescription: description.trim() || undefined,
         })
-        setName("")
-        setDescription("")
-        setSelectedWorkflowId("")
+        reset()
         onClose()
-        navigate({ to: "/app/projects/$projectId", params: { projectId: result.projectId } })
+        onStarted(result.projectId, result.sessionId, result.entryQuestions, wf?.steps[0]?.name ?? "Step 1", wf?.steps[0]?.description)
       } else {
-        await createProject({
+        const result = await createProject({
           name: name.trim(),
           description: description.trim() || undefined,
         })
-        setName("")
-        setDescription("")
-        setSelectedWorkflowId("")
+        reset()
         onClose()
+        onStarted(result as Id<"projects">, null, [], "")
       }
     } finally {
       setIsLoading(false)
@@ -237,10 +243,59 @@ function ProjectCard({
 function ProjectsIndexPage() {
   const projects = useQuery(api.projects.list)
   const removeProject = useMutation(api.projects.remove)
+  const createBlock = useMutation(api.blocks.create)
+  const navigate = useNavigate()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [pendingEntry, setPendingEntry] = useState<{
+    projectId: Id<"projects">
+    sessionId: Id<"sessions">
+    stepName: string
+    stepDescription?: string
+    questions: string[]
+  } | null>(null)
 
   const handleDelete = async (id: Id<"projects">) => {
     await removeProject({ id })
+  }
+
+  const handleStarted = (
+    projectId: Id<"projects">,
+    sessionId: Id<"sessions"> | null,
+    entryQuestions: string[],
+    stepName: string,
+    stepDescription?: string
+  ) => {
+    if (sessionId && entryQuestions.length > 0) {
+      setPendingEntry({ projectId, sessionId, stepName, stepDescription, questions: entryQuestions })
+    } else {
+      navigate({ to: "/app/projects/$projectId", params: { projectId } })
+    }
+  }
+
+  const handleEntrySubmit = async (answers: Record<number, string>) => {
+    if (!pendingEntry) return
+    const { projectId, sessionId, questions } = pendingEntry
+    const lines = questions
+      .map((q, i) => ({ q, a: answers[i]?.trim() }))
+      .filter(({ a }) => a)
+      .map(({ q, a }) => `**${q}**\n${a}`)
+    if (lines.length > 0) {
+      await createBlock({
+        sessionId,
+        content: lines.join("\n\n"),
+        type: "entry_brief",
+        zone: "STABLE",
+      })
+    }
+    setPendingEntry(null)
+    navigate({ to: "/app/projects/$projectId", params: { projectId } })
+  }
+
+  const handleEntrySkip = () => {
+    if (!pendingEntry) return
+    const { projectId } = pendingEntry
+    setPendingEntry(null)
+    navigate({ to: "/app/projects/$projectId", params: { projectId } })
   }
 
   return (
@@ -284,7 +339,19 @@ function ProjectsIndexPage() {
       <CreateProjectDialog
         isOpen={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
+        onStarted={handleStarted}
       />
+
+      {pendingEntry && (
+        <EntryQuestionsDialog
+          isOpen={true}
+          stepName={pendingEntry.stepName}
+          stepDescription={pendingEntry.stepDescription}
+          questions={pendingEntry.questions}
+          onSubmit={handleEntrySubmit}
+          onSkip={handleEntrySkip}
+        />
+      )}
     </div>
   )
 }
