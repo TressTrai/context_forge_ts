@@ -322,18 +322,19 @@ function ProjectDashboard() {
     }
   }
 
-  const handleEntrySubmit = async (answers: Record<string, string>) => {
+  const handleEntrySubmit = async (answers: Record<number, string>) => {
     if (!pendingEntry) return
     const { sessionId, questions } = pendingEntry
     const lines = questions
-      .filter((q) => answers[q]?.trim())
-      .map((q) => `**${q}**\n${answers[q].trim()}`)
+      .map((q, i) => ({ q, a: answers[i]?.trim() }))
+      .filter(({ a }) => a)
+      .map(({ q, a }) => `**${q}**\n${a}`)
     if (lines.length > 0) {
       await createBlock({
         sessionId,
         content: lines.join("\n\n"),
-        type: "context",
-        zone: "WORKING",
+        type: "entry_brief",
+        zone: "STABLE",
       })
     }
 

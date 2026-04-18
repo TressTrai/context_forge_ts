@@ -1,6 +1,6 @@
 # Entry Questions
 
-Entry Questions are a list of predefined questions attached to a specific workflow step. When a user enters a step — either by creating a project from a workflow or advancing to the next step — a dialog appears with these questions. The answers are saved as a single block of type `entry_brief` in the WORKING zone.
+Entry Questions are a list of predefined questions attached to a specific workflow step. When a user enters a step — either by creating a project from a workflow or advancing to the next step — a dialog appears with these questions. The answers are saved as a single block of type `entry_brief` in the STABLE zone.
 
 ## Why this exists
 

@@ -304,7 +304,7 @@ function StepDialog({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Shown when entering this step. Answers are saved as WORKING blocks.
+              Shown when entering this step. Answers are saved as a STABLE entry_brief block.
             </p>
           </div>
 
