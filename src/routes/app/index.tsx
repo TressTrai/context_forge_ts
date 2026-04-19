@@ -805,6 +805,7 @@ function NoSessionSelected() {
 function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
   const navigate = useNavigate()
   const { switchSession } = useSession()
+  const { toast } = useToast()
   const workflowContext = useQuery(api.sessions.getWorkflowContext, { sessionId })
   const goToNextStep = useMutation(api.sessions.goToNextStep)
   const createBlock = useMutation(api.blocks.create)
@@ -851,17 +852,22 @@ function WorkflowStepIndicator({ sessionId }: { sessionId: Id<"sessions"> }) {
       .map((q, i) => ({ q, a: answers[i]?.trim() }))
       .filter(({ a }) => a)
       .map(({ q, a }) => `**${q}**\n${a}`)
-    if (lines.length > 0) {
-      await createBlock({
-        sessionId: pendingEntry.sessionId,
-        content: lines.join("\n\n"),
-        type: "entry_brief",
-        zone: "STABLE",
-      })
-    }
     const nextSessionId = pendingEntry.sessionId
-    setPendingEntry(null)
-    openSession(nextSessionId)
+    try {
+      if (lines.length > 0) {
+        await createBlock({
+          sessionId: nextSessionId,
+          content: lines.join("\n\n"),
+          type: "entry_brief",
+          zone: "STABLE",
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to save answers", err instanceof Error ? err.message : String(err))
+    } finally {
+      setPendingEntry(null)
+      openSession(nextSessionId)
+    }
   }
 
   const handleEntrySkip = () => {

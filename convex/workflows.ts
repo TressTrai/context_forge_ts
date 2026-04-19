@@ -24,6 +24,7 @@ const stepValidator = v.object({
   name: v.string(),
   description: v.optional(v.string()),
   carryForwardZones: v.optional(zoneArray),
+  entryQuestions: v.optional(v.array(v.string())),
 })
 
 /**
@@ -394,6 +395,8 @@ export const startProject = mutation({
       projectId,
       sessionId,
       entryQuestions: firstStep.entryQuestions ?? [],
+      stepName: firstStep.name,
+      stepDescription: firstStep.description,
     }
   },
 })
@@ -553,6 +556,8 @@ export const advanceStep = mutation({
       sessionId,
       stepIndex: nextStepIndex,
       entryQuestions: nextStep.entryQuestions ?? [],
+      stepName: nextStep.name,
+      stepDescription: nextStep.description,
     }
   },
 })

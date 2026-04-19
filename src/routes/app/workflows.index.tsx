@@ -133,7 +133,7 @@ function StartWorkflowDialog({
       setProjectName("")
       setProjectDescription("")
       onClose()
-      onStarted(result.projectId, result.sessionId, result.entryQuestions, workflow.steps[0]?.name ?? "Step 1", workflow.steps[0]?.description)
+      onStarted(result.projectId, result.sessionId, result.entryQuestions, result.stepName, result.stepDescription)
     } finally {
       setIsLoading(false)
     }
@@ -405,16 +405,21 @@ function WorkflowsIndexPage() {
       .map((q, i) => ({ q, a: answers[i]?.trim() }))
       .filter(({ a }) => a)
       .map(({ q, a }) => `**${q}**\n${a}`)
-    if (lines.length > 0) {
-      await createBlock({
-        sessionId,
-        content: lines.join("\n\n"),
-        type: "entry_brief",
-        zone: "STABLE",
-      })
+    try {
+      if (lines.length > 0) {
+        await createBlock({
+          sessionId,
+          content: lines.join("\n\n"),
+          type: "entry_brief",
+          zone: "STABLE",
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to save answers", err instanceof Error ? err.message : String(err))
+    } finally {
+      setPendingEntry(null)
+      navigate({ to: "/app/projects/$projectId", params: { projectId } })
     }
-    setPendingEntry(null)
-    navigate({ to: "/app/projects/$projectId", params: { projectId } })
   }
 
   const handleEntrySkip = () => {

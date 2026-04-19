@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
+import { useToast } from "@/components/ui/toast"
 import type { Id } from "../../../convex/_generated/dataModel"
 
 // Format relative time
@@ -28,7 +29,13 @@ function CreateProjectDialog({
 }: {
   isOpen: boolean
   onClose: () => void
-  onStarted: (projectId: Id<"projects">, sessionId: Id<"sessions"> | null, entryQuestions: string[], stepName: string) => void
+  onStarted: (
+    projectId: Id<"projects">,
+    sessionId: Id<"sessions"> | null,
+    entryQuestions: string[],
+    stepName: string,
+    stepDescription?: string
+  ) => void
 }) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -50,7 +57,6 @@ function CreateProjectDialog({
     setIsLoading(true)
     try {
       if (selectedWorkflowId) {
-        const wf = workflows?.find((w) => w._id === selectedWorkflowId)
         const result = await startProject({
           workflowId: selectedWorkflowId as Id<"workflows">,
           projectName: name.trim(),
@@ -58,7 +64,7 @@ function CreateProjectDialog({
         })
         reset()
         onClose()
-        onStarted(result.projectId, result.sessionId, result.entryQuestions, wf?.steps[0]?.name ?? "Step 1", wf?.steps[0]?.description)
+        onStarted(result.projectId, result.sessionId, result.entryQuestions, result.stepName, result.stepDescription)
       } else {
         const result = await createProject({
           name: name.trim(),
@@ -245,6 +251,7 @@ function ProjectsIndexPage() {
   const removeProject = useMutation(api.projects.remove)
   const createBlock = useMutation(api.blocks.create)
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [pendingEntry, setPendingEntry] = useState<{
     projectId: Id<"projects">
@@ -279,16 +286,21 @@ function ProjectsIndexPage() {
       .map((q, i) => ({ q, a: answers[i]?.trim() }))
       .filter(({ a }) => a)
       .map(({ q, a }) => `**${q}**\n${a}`)
-    if (lines.length > 0) {
-      await createBlock({
-        sessionId,
-        content: lines.join("\n\n"),
-        type: "entry_brief",
-        zone: "STABLE",
-      })
+    try {
+      if (lines.length > 0) {
+        await createBlock({
+          sessionId,
+          content: lines.join("\n\n"),
+          type: "entry_brief",
+          zone: "STABLE",
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to save answers", err instanceof Error ? err.message : String(err))
+    } finally {
+      setPendingEntry(null)
+      navigate({ to: "/app/projects/$projectId", params: { projectId } })
     }
-    setPendingEntry(null)
-    navigate({ to: "/app/projects/$projectId", params: { projectId } })
   }
 
   const handleEntrySkip = () => {

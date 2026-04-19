@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 
 interface EntryQuestionsDialogProps {
@@ -22,6 +22,17 @@ export function EntryQuestionsDialog({
     Object.fromEntries(questions.map((_, i) => [i, ""]))
   )
   const [isLoading, setIsLoading] = useState(false)
+  const firstFieldRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    firstFieldRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isLoading) onSkip()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [isOpen, isLoading, onSkip])
 
   if (!isOpen) return null
 
@@ -38,10 +49,22 @@ export function EntryQuestionsDialog({
   const answeredCount = Object.values(answers).filter((a) => a.trim()).length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading) onSkip()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="entry-questions-title"
+        className="bg-background border border-border rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
+      >
         <div className="p-6 pb-4 border-b border-border shrink-0">
-          <h2 className="text-lg font-semibold">{stepName}</h2>
+          <h2 id="entry-questions-title" className="text-lg font-semibold">
+            {stepName}
+          </h2>
           {stepDescription && (
             <p className="text-sm text-muted-foreground mt-1">{stepDescription}</p>
           )}
@@ -53,6 +76,7 @@ export function EntryQuestionsDialog({
               <div key={i}>
                 <label className="block text-sm font-medium mb-1">{question}</label>
                 <textarea
+                  ref={i === 0 ? firstFieldRef : undefined}
                   value={answers[i] ?? ""}
                   onChange={(e) =>
                     setAnswers((prev) => ({ ...prev, [i]: e.target.value }))
@@ -70,7 +94,7 @@ export function EntryQuestionsDialog({
               {answeredCount} of {questions.length} answered
             </span>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={onSkip}>
+              <Button type="button" variant="ghost" onClick={onSkip} disabled={isLoading}>
                 Skip
               </Button>
               <Button type="submit" disabled={isLoading || answeredCount === 0}>

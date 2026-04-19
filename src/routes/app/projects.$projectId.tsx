@@ -9,6 +9,7 @@ import { api } from "../../../convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { useSession } from "@/contexts/SessionContext"
 import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
+import { useToast } from "@/components/ui/toast"
 import type { Id, Doc } from "../../../convex/_generated/dataModel"
 
 // Format relative time
@@ -273,6 +274,7 @@ function ProjectDashboard() {
   const removeSession = useMutation(api.projects.removeSession)
   const advanceStep = useMutation(api.workflows.advanceStep)
   const createBlock = useMutation(api.blocks.create)
+  const { toast } = useToast()
 
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showCreateSession, setShowCreateSession] = useState(false)
@@ -280,6 +282,7 @@ function ProjectDashboard() {
   const [pendingEntry, setPendingEntry] = useState<{
     sessionId: Id<"sessions">
     stepName: string
+    stepDescription?: string
     questions: string[]
   } | null>(null)
 
@@ -308,10 +311,10 @@ function ProjectDashboard() {
       })
 
       if ((result.entryQuestions ?? []).length > 0) {
-        const nextStep = project.workflow.steps[result.stepIndex]
         setPendingEntry({
           sessionId: result.sessionId,
-          stepName: nextStep?.name ?? "Next Step",
+          stepName: result.stepName,
+          stepDescription: result.stepDescription,
           questions: result.entryQuestions,
         })
       } else {
@@ -329,17 +332,21 @@ function ProjectDashboard() {
       .map((q, i) => ({ q, a: answers[i]?.trim() }))
       .filter(({ a }) => a)
       .map(({ q, a }) => `**${q}**\n${a}`)
-    if (lines.length > 0) {
-      await createBlock({
-        sessionId,
-        content: lines.join("\n\n"),
-        type: "entry_brief",
-        zone: "STABLE",
-      })
+    try {
+      if (lines.length > 0) {
+        await createBlock({
+          sessionId,
+          content: lines.join("\n\n"),
+          type: "entry_brief",
+          zone: "STABLE",
+        })
+      }
+    } catch (err) {
+      toast.error("Failed to save answers", err instanceof Error ? err.message : String(err))
+    } finally {
+      setPendingEntry(null)
+      handleOpenSession(sessionId)
     }
-
-    setPendingEntry(null)
-    handleOpenSession(sessionId)
   }
 
   const handleEntrySkip = () => {
@@ -504,6 +511,7 @@ function ProjectDashboard() {
         <EntryQuestionsDialog
           isOpen={true}
           stepName={pendingEntry.stepName}
+          stepDescription={pendingEntry.stepDescription}
           questions={pendingEntry.questions}
           onSubmit={handleEntrySubmit}
           onSkip={handleEntrySkip}
