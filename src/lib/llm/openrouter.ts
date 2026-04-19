@@ -6,6 +6,7 @@
  */
 
 import { openrouter as settings } from "./settings"
+import { retryFetch } from "./retryFetch"
 
 export interface OpenRouterMessage {
   role: "system" | "user" | "assistant"
@@ -121,7 +122,7 @@ export async function* streamChat(
 
   const model = options?.model || settings.getModel()
 
-  const response = await fetch(`${OPENROUTER_URL}/chat/completions`, {
+  const response = await retryFetch(`${OPENROUTER_URL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -241,7 +242,7 @@ export async function checkHealth(): Promise<{
   }
 
   try {
-    const response = await fetch(`${OPENROUTER_URL}/models`, {
+    const response = await retryFetch(`${OPENROUTER_URL}/models`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -280,7 +281,7 @@ export async function listModels(): Promise<OpenRouterModel[]> {
     throw new Error("OpenRouter API key not configured")
   }
 
-  const response = await fetch(`${OPENROUTER_URL}/models`, {
+  const response = await retryFetch(`${OPENROUTER_URL}/models`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${apiKey}`,
