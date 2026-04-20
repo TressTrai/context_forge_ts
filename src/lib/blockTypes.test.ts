@@ -12,8 +12,8 @@ import {
 } from "./blockTypes"
 
 describe("BLOCK_TYPES", () => {
-  it("contains 13 block types", () => {
-    expect(BLOCK_TYPES).toHaveLength(13)
+  it("contains 14 block types", () => {
+    expect(BLOCK_TYPES).toHaveLength(14)
   })
 
   it("includes all expected types", () => {
@@ -28,6 +28,7 @@ describe("BLOCK_TYPES", () => {
       "user_message",
       "assistant_message",
       "instruction",
+      "entry_brief",
       "persona",
       "framework",
       "skill",
