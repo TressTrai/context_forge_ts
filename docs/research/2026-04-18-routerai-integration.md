@@ -1,6 +1,6 @@
 ---
 date: 2026-04-18
-status: research (probed)
+status: implemented (pending manual smoke)
 related:
   - /home/newub/w/co/univer/subd/docs/research/2026-04-18-routerai-adapter.md (reference adapter from safe-llm pilot)
 ---
