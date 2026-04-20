@@ -127,6 +127,27 @@ export async function* streamChat(
     }
   }
 
+  // Process any remaining buffer
+  if (buffer.trim() && buffer.trim().startsWith("data: ")) {
+    const data = buffer.trim().slice(6)
+    if (data !== "[DONE]") {
+      try {
+        const chunk: RouterAIStreamChunk = JSON.parse(data)
+        if (chunk.provider) responseProvider = chunk.provider
+        const content = chunk.choices[0]?.delta?.content
+        if (content) {
+          fullText += content
+          yield content
+        }
+        if (chunk.usage) {
+          finalUsage = chunk.usage
+        }
+      } catch {
+        // Skip malformed JSON
+      }
+    }
+  }
+
   return {
     text: fullText,
     promptTokens: finalUsage?.prompt_tokens,

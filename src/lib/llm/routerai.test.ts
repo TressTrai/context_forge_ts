@@ -69,6 +69,22 @@ describe("routerai.streamChat", () => {
       provider: "OpenAI",
     })
   })
+
+  it("reassembles a data line split across reader reads", async () => {
+    settings.setApiKey("test-key")
+    const events = [
+      // First enqueue: incomplete JSON (note: no closing brace, no newline)
+      `data: {"id":"1","object":"chat.completion.chunk","created":1,"model":"openai/gpt-4o-mini","choices":[{"index":0,"delta":{"content":"Hel`,
+      // Second enqueue: rest of the first event + terminator + DONE
+      `lo"},"finish_reason":null}]}\n\ndata: [DONE]\n\n`,
+    ]
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(sseStream(events))
+
+    const { chunks, result } = await consumeAll(streamChat([{ role: "user", content: "hi" }]))
+
+    expect(chunks).toEqual(["Hello"])
+    expect(result).toMatchObject({ text: "Hello" })
+  })
 })
 
 describe("routerai.checkHealth", () => {
