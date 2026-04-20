@@ -84,6 +84,7 @@ interface BrainstormDialogProps {
     ollama: { ok: boolean } | null
     claude: { ok: boolean; disabled?: boolean } | null
     openrouter: { ok: boolean } | null
+    routerai?: { ok: boolean } | null
   }
   systemPrompt?: string
   // Claude Code agent behavior toggle
@@ -104,6 +105,8 @@ interface BrainstormDialogProps {
   onToggleSkill?: (skillId: string) => void
   // OpenRouter session cost
   openrouterSessionCost?: number
+  // RouterAI session cost
+  routeraiSessionCost?: number
   // Conversation was restored from localStorage
   conversationRestored?: boolean
   // Gate Validate button on presence of validation-mode blocks
@@ -363,6 +366,7 @@ export function BrainstormDialog({
   activeSkills,
   onToggleSkill,
   openrouterSessionCost,
+  routeraiSessionCost,
   conversationRestored,
   projectId,
   memorySchemaTypes,
@@ -473,6 +477,8 @@ export function BrainstormDialog({
         onProviderChange("ollama")
       } else if (providerHealth.openrouter?.ok) {
         onProviderChange("openrouter")
+      } else if (providerHealth.routerai?.ok) {
+        onProviderChange("routerai")
       }
       // If nothing available, stay put — user will see offline indicators
     }
@@ -485,9 +491,11 @@ export function BrainstormDialog({
       ? providerHealth?.ollama?.ok ?? true
       : provider === "openrouter"
         ? providerHealth?.openrouter?.ok ?? true
-        : providerHealth?.claude === null || providerHealth?.claude === undefined
-          ? true // Optimistic: allow input while health check is pending
-          : providerHealth.claude.ok && !providerHealth.claude.disabled
+        : provider === "routerai"
+          ? providerHealth?.routerai?.ok ?? true
+          : providerHealth?.claude === null || providerHealth?.claude === undefined
+            ? true // Optimistic: allow input while health check is pending
+            : providerHealth.claude.ok && !providerHealth.claude.disabled
 
   // Disable provider change after first message
   const canChangeProvider = messages.length === 0
@@ -534,6 +542,9 @@ export function BrainstormDialog({
                 <option value="openrouter" disabled={!providerHealth?.openrouter?.ok}>
                   OpenRouter {providerHealth?.openrouter?.ok ? "" : "(offline)"}
                 </option>
+                <option value="routerai" disabled={!providerHealth?.routerai?.ok}>
+                  RouterAI {providerHealth?.routerai?.ok ? "" : "(offline)"}
+                </option>
               </select>
               {/* Model selector (Claude provider only) */}
               {provider === "claude" && onModelChange && !providerHealth?.claude?.disabled && (
@@ -559,6 +570,10 @@ export function BrainstormDialog({
               {/* OpenRouter session cost */}
               {provider === "openrouter" && openrouterSessionCost != null && (
                 <OpenRouterCost sessionCost={openrouterSessionCost} />
+              )}
+              {/* RouterAI session cost */}
+              {provider === "routerai" && routeraiSessionCost != null && (
+                <OpenRouterCost sessionCost={routeraiSessionCost} />
               )}
             </div>
             <div className="flex items-center gap-2">

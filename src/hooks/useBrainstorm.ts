@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import * as ollamaClient from "@/lib/llm/ollama"
 import * as openrouterClient from "@/lib/llm/openrouter"
+import * as routeraiClient from "@/lib/llm/routerai"
 import {
   assembleContextWithConversation,
   extractSystemPromptFromBlocks,
@@ -62,7 +63,7 @@ function clearStoredConversation(sessionId: string) {
   }
 }
 
-export type Provider = "ollama" | "claude" | "openrouter"
+export type Provider = "ollama" | "claude" | "openrouter" | "routerai"
 export type Zone = "PERMANENT" | "STABLE" | "WORKING"
 
 export interface Message {
@@ -125,6 +126,9 @@ interface UseBrainstormResult {
 
   // OpenRouter session cost (USD)
   openrouterSessionCost: number
+
+  // RouterAI session cost (USD)
+  routeraiSessionCost: number
 
   // State
   error: string | null
@@ -192,6 +196,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
   // OpenRouter session cost tracking
   const [openrouterSessionCost, setOpenrouterSessionCost] = useState(0)
+
+  // RouterAI session cost tracking
+  const [routeraiSessionCost, setRouteraiSessionCost] = useState(0)
 
   // Track previous text for Claude chunk detection
   const prevTextRef = useRef("")
@@ -385,6 +392,7 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     setGenerationId(null)
     setIsStreaming(false)
     setOpenrouterSessionCost(0)
+    setRouteraiSessionCost(0)
     prevTextRef.current = ""
     abortControllerRef.current?.abort()
     clearStoredConversation(sessionId)
@@ -544,6 +552,92 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
     [blocks, activeSkills, renderedMemory]
   )
 
+  // Send message via RouterAI (client-side streaming)
+  const sendMessageRouterAI = useCallback(
+    async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[]) => {
+      if (!blocks) {
+        throw new Error("Blocks not loaded yet")
+      }
+
+      // Assemble context with blocks, conversation, and active skills
+      const skillsContent = getActiveSkillsContent(activeSkills)
+      const contextMessages = assembleContextWithConversation(blocks, conversationHistory, content, skillsContent || undefined)
+
+      // Extract system prompt if present
+      const systemPrompt = extractSystemPromptFromBlocks(blocks)
+
+      // Build messages for RouterAI
+      const routeraiMessages: routeraiClient.RouterAIMessage[] = []
+
+      // Add system prompt first if present (with no-tools suffix for consistency)
+      const routeraiSystemPrompt = [systemPrompt, renderedMemory].filter(Boolean).join("\n\n")
+      if (routeraiSystemPrompt) {
+        routeraiMessages.push({
+          role: "system",
+          content: routeraiSystemPrompt + NO_TOOLS_SUFFIX,
+        })
+      }
+
+      // Add context messages
+      for (const msg of contextMessages) {
+        routeraiMessages.push({
+          role: msg.role,
+          content: msg.content,
+        })
+      }
+
+      let fullText = ""
+
+      // Create a fresh AbortController for this request
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
+      try {
+        const generator = routeraiClient.streamChat(routeraiMessages, {
+          signal: controller.signal,
+        })
+
+        // Manual iteration to capture the return value (token counts)
+        let result: IteratorResult<string, routeraiClient.StreamChatResult>
+        do {
+          result = await generator.next()
+          if (!result.done && result.value) {
+            fullText += result.value
+            setStreamingText(fullText)
+          }
+        } while (!result.done)
+
+        // Calculate cost from token counts
+        const streamResult = result.value
+        if (streamResult?.promptTokens && streamResult?.completionTokens && streamResult?.model) {
+          const pricing = await routeraiClient.getModelPricing(streamResult.model)
+          if (pricing) {
+            const cost = routeraiClient.calculateCost(
+              streamResult.promptTokens,
+              streamResult.completionTokens,
+              pricing
+            )
+            setRouteraiSessionCost((prev) => prev + cost)
+          }
+        }
+
+        // Add assistant message to conversation
+        if (fullText.trim()) {
+          const assistantMessage: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: fullText,
+            timestamp: Date.now(),
+          }
+          setMessages((prev) => [...prev, assistantMessage])
+        }
+      } finally {
+        setStreamingText("")
+      }
+    },
+    [blocks, activeSkills, renderedMemory]
+  )
+
   // Send message via Claude (Convex mutations - backend)
   const sendMessageClaude = useCallback(
     async (content: string, conversationHistory: { role: "user" | "assistant"; content: string }[], isValidation = false) => {
@@ -601,6 +695,8 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
           await sendMessageOllama(content.trim(), conversationHistory)
         } else if (provider === "openrouter") {
           await sendMessageOpenRouter(content.trim(), conversationHistory)
+        } else if (provider === "routerai") {
+          await sendMessageRouterAI(content.trim(), conversationHistory)
         } else {
           await sendMessageClaude(content.trim(), conversationHistory, isValidation)
         }
@@ -614,13 +710,13 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setError(message)
         onError?.(message)
       } finally {
-        // For Ollama/OpenRouter, streaming ends here. For Claude, it ends in the useEffect.
-        if (provider === "ollama" || provider === "openrouter") {
+        // For Ollama/OpenRouter/RouterAI, streaming ends here. For Claude, it ends in the useEffect.
+        if (provider === "ollama" || provider === "openrouter" || provider === "routerai") {
           setIsStreaming(false)
         }
       }
     },
-    [provider, isStreaming, messages, sendMessageOllama, sendMessageOpenRouter, sendMessageClaude, onError]
+    [provider, isStreaming, messages, sendMessageOllama, sendMessageOpenRouter, sendMessageRouterAI, sendMessageClaude, onError]
   )
 
   const sendMessage = useCallback(
@@ -714,6 +810,8 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
           await sendMessageOllama(userMessage.content, conversationHistory)
         } else if (provider === "openrouter") {
           await sendMessageOpenRouter(userMessage.content, conversationHistory)
+        } else if (provider === "routerai") {
+          await sendMessageRouterAI(userMessage.content, conversationHistory)
         } else {
           await sendMessageClaude(userMessage.content, conversationHistory)
         }
@@ -725,12 +823,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setError(errorMsg)
         onError?.(errorMsg)
       } finally {
-        if (provider === "ollama" || provider === "openrouter") {
+        if (provider === "ollama" || provider === "openrouter" || provider === "routerai") {
           setIsStreaming(false)
         }
       }
     },
-    [messages, isStreaming, provider, sendMessageOllama, sendMessageOpenRouter, sendMessageClaude, onError]
+    [messages, isStreaming, provider, sendMessageOllama, sendMessageOpenRouter, sendMessageRouterAI, sendMessageClaude, onError]
   )
 
   // Edit a message and resend (for user messages)
@@ -774,6 +872,8 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
           await sendMessageOllama(newContent.trim(), conversationHistory)
         } else if (provider === "openrouter") {
           await sendMessageOpenRouter(newContent.trim(), conversationHistory)
+        } else if (provider === "routerai") {
+          await sendMessageRouterAI(newContent.trim(), conversationHistory)
         } else {
           await sendMessageClaude(newContent.trim(), conversationHistory)
         }
@@ -785,12 +885,12 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
         setError(errorMsg)
         onError?.(errorMsg)
       } finally {
-        if (provider === "ollama" || provider === "openrouter") {
+        if (provider === "ollama" || provider === "openrouter" || provider === "routerai") {
           setIsStreaming(false)
         }
       }
     },
-    [messages, isStreaming, provider, sendMessageOllama, sendMessageOpenRouter, sendMessageClaude, onError]
+    [messages, isStreaming, provider, sendMessageOllama, sendMessageOpenRouter, sendMessageRouterAI, sendMessageClaude, onError]
   )
 
   return {
@@ -840,6 +940,9 @@ export function useBrainstorm(options: UseBrainstormOptions): UseBrainstormResul
 
     // OpenRouter session cost
     openrouterSessionCost,
+
+    // RouterAI session cost
+    routeraiSessionCost,
 
     // Error
     error,
