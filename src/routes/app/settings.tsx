@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { DebouncedButton } from "@/components/ui/debounced-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { openrouter, ollama } from "@/lib/llm"
-import { openrouter as openrouterSettings, ollama as ollamaSettings, compression as compressionSettings, type CompressionProvider } from "@/lib/llm/settings"
+import { openrouter, ollama, routerai } from "@/lib/llm"
+import { openrouter as openrouterSettings, ollama as ollamaSettings, compression as compressionSettings, routerai as routeraiSettings, type CompressionProvider } from "@/lib/llm/settings"
 
 // Provider health status
 interface ProviderStatus {
@@ -124,6 +124,116 @@ function OpenRouterSettings() {
               available models
             </a>
           </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <DebouncedButton onClick={handleSave} disabled={!apiKey} debounceMs={500}>
+          {saved ? "Saved!" : "Save"}
+        </DebouncedButton>
+        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
+          {status.checking ? "Testing..." : "Test Connection"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function RouterAISettings() {
+  const [apiKey, setApiKey] = useState(() => {
+    const stored = routeraiSettings.getApiKey()
+    return stored ? "sk-****" + stored.slice(-4) : ""
+  })
+  const [baseUrl, setBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
+  const [model, setModel] = useState(() => routeraiSettings.getModel())
+  const [saved, setSaved] = useState(false)
+  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+
+  const handleSave = () => {
+    if (apiKey && !apiKey.startsWith("sk-****")) {
+      routeraiSettings.setApiKey(apiKey)
+    }
+    routeraiSettings.setBaseUrl(baseUrl)
+    routeraiSettings.setModel(model)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleTest = async () => {
+    setStatus({ checking: true, ok: false })
+    const result = await routerai.checkHealth()
+    setStatus({
+      checking: false,
+      ok: result.ok,
+      error: result.error,
+      model: result.model,
+    })
+  }
+
+  const handleClear = () => {
+    routeraiSettings.clearApiKey()
+    setApiKey("")
+    setStatus({ checking: false, ok: false })
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">RouterAI</h3>
+          <p className="text-sm text-muted-foreground">
+            OpenAI-compatible model gateway with configurable tenant base URL
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {status.ok && (
+            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
+          )}
+          {status.error && (
+            <span className="text-sm text-red-600 dark:text-red-400">{status.error}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="routerai-key">API Key</Label>
+          <div className="flex gap-2">
+            <Input
+              id="routerai-key"
+              type="password"
+              placeholder="sk-..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="flex-1"
+            />
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="routerai-base-url">Base URL</Label>
+          <Input
+            id="routerai-base-url"
+            placeholder="https://routerai.ru/api/v1"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Default: https://routerai.ru/api/v1
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="routerai-model">Model</Label>
+          <Input
+            id="routerai-model"
+            placeholder="openai/gpt-4o-mini"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+          />
         </div>
       </div>
 
@@ -347,6 +457,7 @@ function SettingsPage() {
 
         <div className="grid gap-4">
           <OpenRouterSettings />
+          <RouterAISettings />
           <OllamaSettings />
           <ClaudeCodeSettings />
         </div>
