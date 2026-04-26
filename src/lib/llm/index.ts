@@ -30,6 +30,7 @@
 
 export * as openrouter from "./openrouter"
 export * as ollama from "./ollama"
+export * as routerai from "./routerai"
 export * as context from "./context"
 export * as settings from "./settings"
 
@@ -37,3 +38,4 @@ export * as settings from "./settings"
 export type { ContextMessage, ConversationMessage, Block } from "./context"
 export type { StreamChatOptions as OpenRouterOptions, StreamChatResult as OpenRouterResult } from "./openrouter"
 export type { StreamChatOptions as OllamaOptions, StreamChatResult as OllamaResult } from "./ollama"
+export type { StreamChatOptions as RouterAIOptions, StreamChatResult as RouterAIResult } from "./routerai"

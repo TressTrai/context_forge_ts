@@ -12,6 +12,9 @@ const KEYS = {
   COMPRESSION_PROVIDER: "contextforge-compression-provider",
   BRAINSTORM_PROVIDER: "contextforge-brainstorm-provider",
   BRAINSTORM_MODEL: "contextforge-brainstorm-model",
+  ROUTERAI_API_KEY: "contextforge-routerai-api-key",
+  ROUTERAI_BASE_URL: "contextforge-routerai-base-url",
+  ROUTERAI_MODEL: "contextforge-routerai-model",
 } as const
 
 // Compression provider types
@@ -23,6 +26,8 @@ const DEFAULTS = {
   OLLAMA_URL: "http://localhost:11434",
   OLLAMA_MODEL: "llama3.2:latest",
   COMPRESSION_PROVIDER: "claude-code" as CompressionProvider,
+  ROUTERAI_BASE_URL: "https://routerai.ru/api/v1",
+  ROUTERAI_MODEL: "openai/gpt-4o-mini",
 } as const
 
 /**
@@ -115,6 +120,43 @@ export const brainstorm = {
 }
 
 /**
+ * RouterAI settings (OpenAI-compatible gateway, tenant-configurable base URL)
+ */
+export const routerai = {
+  getApiKey(): string | null {
+    return localStorage.getItem(KEYS.ROUTERAI_API_KEY)
+  },
+
+  setApiKey(key: string): void {
+    localStorage.setItem(KEYS.ROUTERAI_API_KEY, key)
+  },
+
+  clearApiKey(): void {
+    localStorage.removeItem(KEYS.ROUTERAI_API_KEY)
+  },
+
+  getBaseUrl(): string {
+    return localStorage.getItem(KEYS.ROUTERAI_BASE_URL) || DEFAULTS.ROUTERAI_BASE_URL
+  },
+
+  setBaseUrl(url: string): void {
+    localStorage.setItem(KEYS.ROUTERAI_BASE_URL, url)
+  },
+
+  getModel(): string {
+    return localStorage.getItem(KEYS.ROUTERAI_MODEL) || DEFAULTS.ROUTERAI_MODEL
+  },
+
+  setModel(model: string): void {
+    localStorage.setItem(KEYS.ROUTERAI_MODEL, model)
+  },
+
+  isConfigured(): boolean {
+    return !!this.getApiKey()
+  },
+}
+
+/**
  * Export all settings for debugging/testing
  */
 export function getAllSettings(): Record<string, string | null> {
@@ -124,6 +166,9 @@ export function getAllSettings(): Record<string, string | null> {
     ollamaUrl: ollama.getUrl(),
     ollamaModel: ollama.getModel(),
     compressionProvider: compression.getProvider(),
+    routeraiApiKey: routerai.getApiKey() ? "[CONFIGURED]" : null,
+    routeraiBaseUrl: routerai.getBaseUrl(),
+    routeraiModel: routerai.getModel(),
   }
 }
 

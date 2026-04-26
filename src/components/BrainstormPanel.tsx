@@ -7,11 +7,13 @@ import { useBrainstorm, type Zone } from "@/hooks/useBrainstorm"
 import type { Id } from "../../convex/_generated/dataModel"
 import * as ollamaClient from "@/lib/llm/ollama"
 import * as openrouterClient from "@/lib/llm/openrouter"
+import * as routeraiClient from "@/lib/llm/routerai"
 
 interface ProviderHealth {
   ollama: { ok: boolean; error?: string } | null
   claude: { ok: boolean; error?: string; version?: string; disabled?: boolean } | null
   openrouter: { ok: boolean; configured?: boolean; error?: string; model?: string } | null
+  routerai: { ok: boolean; configured?: boolean; error?: string; model?: string } | null
 }
 
 // Check provider health on mount (client-side for Ollama/OpenRouter, backend for Claude)
@@ -20,6 +22,7 @@ function useProviderHealth() {
     ollama: null,
     claude: null, // Null until health check completes - allows optimistic input enable
     openrouter: null,
+    routerai: null,
   })
   const features = useQuery(api.features.getFlags)
 
@@ -30,6 +33,9 @@ function useProviderHealth() {
 
       // Check OpenRouter (client-side)
       const openrouterHealth = await openrouterClient.checkHealth()
+
+      // Check RouterAI (client-side)
+      const routeraiHealth = await routeraiClient.checkHealth()
 
       // Check Claude Code (backend) - only if enabled
       let claudeHealth: { ok: boolean; error?: string; version?: string; disabled?: boolean } | null = null
@@ -58,6 +64,7 @@ function useProviderHealth() {
         ollama: ollamaHealth,
         claude: claudeHealth,
         openrouter: openrouterHealth,
+        routerai: routeraiHealth,
       })
     }
 
@@ -175,8 +182,8 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
   // Compact mode - just a button
   if (compact) {
     // Optimistic: if all health is still null (pending), allow opening
-    const allPending = health.claude === null && health.ollama === null && health.openrouter === null
-    const anyProviderAvailable = allPending || health.claude?.ok || health.ollama?.ok || health.openrouter?.ok
+    const allPending = health.claude === null && health.ollama === null && health.openrouter === null && health.routerai === null
+    const anyProviderAvailable = allPending || health.claude?.ok || health.ollama?.ok || health.openrouter?.ok || health.routerai?.ok
     return (
       <>
         <Button
@@ -220,6 +227,7 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
           activeSkills={brainstorm.activeSkills}
           onToggleSkill={brainstorm.toggleSkill}
           openrouterSessionCost={brainstorm.openrouterSessionCost}
+          routeraiSessionCost={brainstorm.routeraiSessionCost}
           conversationRestored={brainstorm.conversationRestored}
           projectId={projectId}
           memorySchemaTypes={memorySchema?.types}
@@ -240,6 +248,7 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
             {/* Only show Claude if not disabled */}
             {!health.claude?.disabled && getProviderStatus("Claude", health.claude)}
             {getProviderStatus("OpenRouter", health.openrouter)}
+            {getProviderStatus("RouterAI", health.routerai)}
           </div>
         </div>
 
@@ -255,8 +264,8 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
             onClick={() => brainstorm.open()}
             disabled={
               // Optimistic: allow opening while health checks are pending
-              !(health.claude === null && health.ollama === null && health.openrouter === null) &&
-              !health.claude?.ok && !health.ollama?.ok && !health.openrouter?.ok
+              !(health.claude === null && health.ollama === null && health.openrouter === null && health.routerai === null) &&
+              !health.claude?.ok && !health.ollama?.ok && !health.openrouter?.ok && !health.routerai?.ok
             }
           >
             {brainstorm.messages.length > 0
@@ -373,6 +382,7 @@ export function BrainstormPanel({ sessionId, compact = false }: BrainstormPanelP
         activeSkills={brainstorm.activeSkills}
         onToggleSkill={brainstorm.toggleSkill}
         openrouterSessionCost={brainstorm.openrouterSessionCost}
+        routeraiSessionCost={brainstorm.routeraiSessionCost}
         conversationRestored={brainstorm.conversationRestored}
         projectId={projectId}
         memorySchemaTypes={memorySchema?.types}
