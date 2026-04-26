@@ -35,6 +35,7 @@
 | [API_REFERENCE.md](./API_REFERENCE.md) | All Convex functions with args and returns |
 | [DATA_MODEL.md](./DATA_MODEL.md) | Database schema and relationships |
 | [CONTEXT_OPTIMIZATION_AND_CACHING.md](./CONTEXT_OPTIMIZATION_AND_CACHING.md) | Zone optimization and LLM caching strategies |
+| [CONCEPTUAL_ARCHITECTURE.md](./CONCEPTUAL_ARCHITECTURE.md) | Feature-oriented map: what the system does (memory, validation, research, etc.) |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical design and LLM integration patterns |
 | [REFERENCES.md](./REFERENCES.md) | External resources and links |
 

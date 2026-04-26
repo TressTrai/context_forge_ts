@@ -21,11 +21,15 @@ ContextForge helps you manage the context window when working with Large Languag
 
 - **Visual Zone Management** - Drag-and-drop blocks between zones
 - **Multi-Turn Brainstorming** - Have conversations with LLMs using your context
-- **Three LLM Providers** - Ollama (local), Claude Code, and OpenRouter
-- **Real-Time Streaming** - See responses as they generate
-- **Workflows & Templates** - Create reusable document pipelines
+- **Four LLM Providers** - Ollama (local), Claude Code, OpenRouter, and RouterAI
+- **Real-Time Streaming** - See responses as they generate, with self-talk detection that aborts on role-marker hallucinations
+- **Project Memory** - Tagged memory entries injected per-session, with pinning, schema templates, and a bottom-drawer UI
+- **Validation Mode** - Critique your context against criteria; save accepted feedback straight into memory
+- **Research Blocks** - Run web-search-backed research and persist the result as a first-class block
+- **Workflows & Templates** - Create reusable document pipelines, with entry questions per step
 - **Projects** - Organize related sessions together
 - **Session Snapshots** - Save and restore context states
+- **Prompt Caching via Session Resume** - Claude Agent SDK session resume (~90% cost reduction on turn 2+)
 - **LLM Observability** - LangFuse integration for tracing
 
 ## Current Status
@@ -34,14 +38,22 @@ ContextForge helps you manage the context window when working with Large Languag
 |---------|--------|
 | Zone-based block management | ✅ Complete |
 | Drag-and-drop reordering | ✅ Complete |
-| Block editor with 12 types | ✅ Complete |
+| Block editor with 14 types | ✅ Complete |
 | Sessions & snapshots | ✅ Complete |
 | Multi-turn brainstorming | ✅ Complete |
 | LLM streaming (Ollama) | ✅ Complete |
 | LLM streaming (Claude Code) | ✅ Complete |
 | LLM streaming (OpenRouter) | ✅ Complete |
+| LLM streaming (RouterAI) | ✅ Complete |
+| Claude SDK session resume (prompt caching) | ✅ Complete |
+| Streaming self-talk detection / abort | ✅ Complete |
+| Project memory (tags, pins, drawer UI) | ✅ Complete |
+| Validation mode + save-to-memory | ✅ Complete |
+| Research blocks (web-search-backed) | ✅ Complete |
+| Workflow entry questions | ✅ Complete |
 | Templates & workflows | ✅ Complete |
 | Projects & organization | ✅ Complete |
+| Auth: field validation + password visibility | ✅ Complete |
 | LangFuse observability | ✅ Complete |
 | Token counting & budgets | ✅ Complete |
 | SKILL.md import & context-map export | ✅ Complete |
@@ -92,7 +104,7 @@ pnpm build:all
 
 ## LLM Providers
 
-ContextForge supports three LLM providers. You need at least one configured.
+ContextForge supports four LLM providers. You need at least one configured. OpenRouter and RouterAI are browser-direct BYOK (key stored in localStorage); Ollama and Claude Code run through the Convex backend.
 
 ### Ollama (Recommended for Development)
 
@@ -108,18 +120,25 @@ ollama pull llama3.2
 
 ### OpenRouter (Recommended for Production)
 
-Access Claude, GPT-4, Llama, and 100+ models through one API.
+Access Claude, GPT-4, Llama, and 100+ models through one API. Browser-direct BYOK — paste the key in `/app/settings`, no backend env var needed.
 
-```bash
+```
 # Get API key from https://openrouter.ai/keys
-# Add to .env.local:
-OPENROUTER_API_KEY=sk-or-v1-...
+# Open the app → Settings → OpenRouter → paste key → Save
 ```
 
-Then set via Convex:
-```bash
-pnpm exec convex env set OPENROUTER_API_KEY sk-or-v1-...
+Calls go straight from the browser to OpenRouter; the key lives in `localStorage`. The shared `retryFetch` helper applies exponential backoff (5/10/20/40/80 s) on 429/5xx and transient network errors.
+
+### RouterAI
+
+Alternative OpenAI-compatible gateway (Qwen, DeepSeek, GLM, plus proxied OpenAI/Anthropic). Same browser-direct BYOK as OpenRouter, but with a configurable base URL per tenant.
+
 ```
+# Get a key from your RouterAI tenant
+# Open the app → Settings → RouterAI → paste key + base URL → Save → Test Connection
+```
+
+Defaults: base URL `https://routerai.ru/api/v1`, model `openai/gpt-4o-mini`. Pricing is read from `/models` for cost tracking. Same retry policy as OpenRouter.
 
 ### Claude Code
 
@@ -148,8 +167,10 @@ Copy `.env.example` to `.env.local` and configure:
 | `OLLAMA_URL` | No | Server URL (default: `http://localhost:11434`) |
 | `OLLAMA_MODEL` | No | Default model (default: `llama3.2`) |
 | **OpenRouter** | | |
-| `OPENROUTER_API_KEY` | For OpenRouter | API key from openrouter.ai |
+| `OPENROUTER_API_KEY` | No | Optional fallback; key is normally set in-app and stored in `localStorage` |
 | `OPENROUTER_MODEL` | No | Default model (default: `anthropic/claude-3.5-sonnet`) |
+| **RouterAI** | | |
+| RouterAI key / base URL / model | No | Configured in-app (Settings → RouterAI), persisted to `localStorage` |
 | **Claude Code** | | |
 | `CLAUDE_CODE_PATH` | For Claude | Path to Claude Code CLI |
 | **LangFuse** | | |
@@ -286,14 +307,15 @@ Content is assembled in a specific order to optimize LLM caching:
 
 ### Block Types
 
-ContextForge uses 12 semantic block types:
+ContextForge uses 14 semantic block types across 5 categories:
 
 | Category | Types |
 |----------|-------|
 | Core | `system_prompt`, `note`, `code` |
 | Document | `guideline`, `template`, `reference`, `document` |
 | Conversation | `user_message`, `assistant_message`, `instruction` |
-| Meta | `persona`, `framework` |
+| Meta | `entry_brief`, `persona`, `framework` |
+| Skill | `skill` |
 
 ### Workflows
 
@@ -303,6 +325,24 @@ Create multi-step document creation pipelines:
 2. Configure which zones carry forward
 3. Start a project from the workflow
 4. Progress through steps, building on previous outputs
+
+Each step can declare **entry questions** — answers are captured into an `entry_brief` block in the STABLE zone before the step runs.
+
+### Project Memory
+
+A per-project memory store of tagged entries (decisions, facts, preferences). Entries are **scored against session tags** and the top matches are injected into context automatically. Manage them from the bottom drawer (collapsed/peek/full states); pin entries to keep them in every turn. Schema templates seed common categories on first use. Memory edits invalidate the Claude SDK session so the next turn rebuilds with fresh content.
+
+### Validation Mode
+
+Run a separate "validation" turn against your context. The model critiques against your criteria; accepted feedback can be **saved straight into memory** with LLM-assisted drafting. The Validate button is gated on having criteria defined and accepts an empty prompt (defaults applied).
+
+### Research Blocks
+
+Trigger web-search-backed research from inside a session (Claude Agent SDK with the search tool enabled). Results land as a `research` block you can edit, pin, or carry forward. Local-filesystem research is gated behind `LOCAL_RESEARCH_ENABLED`.
+
+### Self-Talk Detection
+
+Brainstorm streams are scanned for role-marker hallucinations (`Human:`, `Assistant:`, etc.). On detection the stream is aborted before the model can derail — protects against prompt-format drift across providers.
 
 ## Documentation
 
