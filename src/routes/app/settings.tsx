@@ -2,7 +2,7 @@
  * Settings page for configuring LLM providers.
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { DebouncedButton } from "@/components/ui/debounced-button"
@@ -28,53 +28,50 @@ function getInitialApiKeyDisplay(): string {
 function OpenRouterSettings() {
   const [apiKey, setApiKey] = useState(getInitialApiKeyDisplay)
   const [model, setModel] = useState(() => openrouterSettings.getModel())
-  const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedApiKey, setSavedApiKey] = useState(getInitialApiKeyDisplay)
+  const [savedModel, setSavedModel] = useState(() => openrouterSettings.getModel())
 
-  const handleSave = () => {
+  const hasChanges = apiKey !== savedApiKey || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [apiKey, model])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await openrouter.checkHealth(keyToTest, model)
+    if (!result.ok) {
+      setIsSaving(false)
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
     if (apiKey && !apiKey.startsWith("sk-****")) {
       openrouterSettings.setApiKey(apiKey)
     }
     openrouterSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
-    const result = await openrouter.checkHealth(keyToTest, model)
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setSavedApiKey(apiKey)
+    setSavedModel(model)
+    setIsSaving(false)
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   const handleClear = () => {
     openrouterSettings.clearApiKey()
     setApiKey("")
-    setStatus({ checking: false, ok: false })
+    setSavedApiKey("")
+    setSaveResult(null)
   }
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">OpenRouter</h3>
-          <p className="text-sm text-muted-foreground">
-            Access Claude, GPT-4, Llama, and 100+ models via unified API
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400">{status.error}</span>
-          )}
-        </div>
+      <div>
+        <h3 className="text-lg font-semibold">OpenRouter</h3>
+        <p className="text-sm text-muted-foreground">
+          Access Claude, GPT-4, Llama, and 100+ models via unified API
+        </p>
       </div>
 
       <div className="grid gap-4">
@@ -130,72 +127,71 @@ function OpenRouterSettings() {
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} disabled={!apiKey} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
 }
 
 function RouterAISettings() {
-  const [apiKey, setApiKey] = useState(() => {
-    const stored = routeraiSettings.getApiKey()
-    return stored ? "sk-****" + stored.slice(-4) : ""
-  })
+  const initialKey = () => { const s = routeraiSettings.getApiKey(); return s ? "sk-****" + s.slice(-4) : "" }
+  const [apiKey, setApiKey] = useState(initialKey)
   const [baseUrl, setBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
   const [model, setModel] = useState(() => routeraiSettings.getModel())
-  const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedApiKey, setSavedApiKey] = useState(initialKey)
+  const [savedBaseUrl, setSavedBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
+  const [savedModel, setSavedModel] = useState(() => routeraiSettings.getModel())
 
-  const handleSave = () => {
+  const hasChanges = apiKey !== savedApiKey || baseUrl !== savedBaseUrl || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [apiKey, baseUrl, model])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await routerai.checkHealth(keyToTest, model)
+    if (!result.ok) {
+      setIsSaving(false)
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
     if (apiKey && !apiKey.startsWith("sk-****")) {
       routeraiSettings.setApiKey(apiKey)
     }
     routeraiSettings.setBaseUrl(baseUrl)
     routeraiSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
-    const result = await routerai.checkHealth(keyToTest, model)
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setSavedApiKey(apiKey)
+    setSavedBaseUrl(baseUrl)
+    setSavedModel(model)
+    setIsSaving(false)
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   const handleClear = () => {
     routeraiSettings.clearApiKey()
     setApiKey("")
-    setStatus({ checking: false, ok: false })
+    setSavedApiKey("")
+    setSaveResult(null)
   }
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">RouterAI</h3>
-          <p className="text-sm text-muted-foreground">
-            OpenAI-compatible model gateway with configurable tenant base URL
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400">{status.error}</span>
-          )}
-        </div>
+      <div>
+        <h3 className="text-lg font-semibold">RouterAI</h3>
+        <p className="text-sm text-muted-foreground">
+          OpenAI-compatible model gateway with configurable tenant base URL
+        </p>
       </div>
 
       <div className="grid gap-4">
@@ -264,12 +260,14 @@ function RouterAISettings() {
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} disabled={!apiKey} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
