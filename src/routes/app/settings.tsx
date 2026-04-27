@@ -333,7 +333,21 @@ function OllamaSettings() {
   useEffect(() => { setSaveResult(null) }, [url, model])
 
   useEffect(() => {
-    ollama.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+    const check = async () => {
+      const result = await ollama.checkHealth()
+      if (!result.ok) { setHealth("error"); return }
+      try {
+        const models = await ollama.listModels()
+        const modelIds = models.map((m) => m.name)
+        const normalizedModel = model.includes(":") ? model : `${model}:latest`
+        if (modelIds.length > 0 && !modelIds.includes(model) && !modelIds.includes(normalizedModel)) {
+          setHealth("error")
+          return
+        }
+      } catch { /* skip model check if listing fails */ }
+      setHealth("ok")
+    }
+    check()
   }, [])
 
   const handleSave = async () => {
