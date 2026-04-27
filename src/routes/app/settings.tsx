@@ -42,7 +42,8 @@ function OpenRouterSettings() {
 
   const handleTest = async () => {
     setStatus({ checking: true, ok: false })
-    const result = await openrouter.checkHealth()
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await openrouter.checkHealth(keyToTest, model)
     setStatus({
       checking: false,
       ok: result.ok,
@@ -162,7 +163,8 @@ function RouterAISettings() {
 
   const handleTest = async () => {
     setStatus({ checking: true, ok: false })
-    const result = await routerai.checkHealth()
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await routerai.checkHealth(keyToTest, model)
     setStatus({
       checking: false,
       ok: result.ok,
