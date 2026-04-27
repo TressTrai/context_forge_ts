@@ -158,6 +158,16 @@ export async function checkHealth(overrideUrl?: string): Promise<{
   const ollamaUrl = overrideUrl || settings.getUrl()
 
   try {
+    new URL(ollamaUrl)
+  } catch {
+    return { ok: false, url: ollamaUrl, error: `Invalid URL: "${ollamaUrl}"` }
+  }
+
+  if (!ollamaUrl.startsWith("http://") && !ollamaUrl.startsWith("https://")) {
+    return { ok: false, url: ollamaUrl, error: "URL must start with http:// or https://" }
+  }
+
+  try {
     const response = await fetch(`${ollamaUrl}/api/tags`, {
       method: "GET",
       signal: AbortSignal.timeout(5000),
