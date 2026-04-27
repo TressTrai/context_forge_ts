@@ -11,12 +11,28 @@ import { Label } from "@/components/ui/label"
 import { openrouter, ollama, routerai } from "@/lib/llm"
 import { openrouter as openrouterSettings, ollama as ollamaSettings, compression as compressionSettings, routerai as routeraiSettings, type CompressionProvider } from "@/lib/llm/settings"
 
-// Provider health status
-interface ProviderStatus {
-  checking: boolean
-  ok: boolean
-  error?: string
-  model?: string
+type HealthState = "idle" | "checking" | "ok" | "error"
+
+function StatusDot({ status }: { status: HealthState }) {
+  if (status === "idle") return null
+  if (status === "checking") return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
+      Checking...
+    </span>
+  )
+  if (status === "ok") return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+      <span className="w-2 h-2 rounded-full bg-green-500" />
+      Connected
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+      <span className="w-2 h-2 rounded-full bg-red-500" />
+      Offline
+    </span>
+  )
 }
 
 // Helper to get initial masked API key
@@ -32,10 +48,18 @@ function OpenRouterSettings() {
   const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [savedApiKey, setSavedApiKey] = useState(getInitialApiKeyDisplay)
   const [savedModel, setSavedModel] = useState(() => openrouterSettings.getModel())
+  const [health, setHealth] = useState<HealthState>(() =>
+    openrouterSettings.getApiKey() ? "checking" : "idle"
+  )
 
   const hasChanges = apiKey !== savedApiKey || model !== savedModel
 
   useEffect(() => { setSaveResult(null) }, [apiKey, model])
+
+  useEffect(() => {
+    if (!openrouterSettings.getApiKey()) return
+    openrouter.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+  }, [])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -44,6 +68,7 @@ function OpenRouterSettings() {
     const result = await openrouter.checkHealth(keyToTest, model)
     if (!result.ok) {
       setIsSaving(false)
+      setHealth("error")
       setSaveResult({ ok: false, message: result.error || "Connection failed" })
       return
     }
@@ -54,6 +79,7 @@ function OpenRouterSettings() {
     setSavedApiKey(apiKey)
     setSavedModel(model)
     setIsSaving(false)
+    setHealth("ok")
     setSaveResult({ ok: true, message: "Saved!" })
     setTimeout(() => setSaveResult(null), 2000)
   }
@@ -62,16 +88,20 @@ function OpenRouterSettings() {
     openrouterSettings.clearApiKey()
     setApiKey("")
     setSavedApiKey("")
+    setHealth("idle")
     setSaveResult(null)
   }
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">OpenRouter</h3>
-        <p className="text-sm text-muted-foreground">
-          Access Claude, GPT-4, Llama, and 100+ models via unified API
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">OpenRouter</h3>
+          <p className="text-sm text-muted-foreground">
+            Access Claude, GPT-4, Llama, and 100+ models via unified API
+          </p>
+        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -150,10 +180,18 @@ function RouterAISettings() {
   const [savedApiKey, setSavedApiKey] = useState(initialKey)
   const [savedBaseUrl, setSavedBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
   const [savedModel, setSavedModel] = useState(() => routeraiSettings.getModel())
+  const [health, setHealth] = useState<HealthState>(() =>
+    routeraiSettings.getApiKey() ? "checking" : "idle"
+  )
 
   const hasChanges = apiKey !== savedApiKey || baseUrl !== savedBaseUrl || model !== savedModel
 
   useEffect(() => { setSaveResult(null) }, [apiKey, baseUrl, model])
+
+  useEffect(() => {
+    if (!routeraiSettings.getApiKey()) return
+    routerai.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+  }, [])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -162,6 +200,7 @@ function RouterAISettings() {
     const result = await routerai.checkHealth(keyToTest, model)
     if (!result.ok) {
       setIsSaving(false)
+      setHealth("error")
       setSaveResult({ ok: false, message: result.error || "Connection failed" })
       return
     }
@@ -174,6 +213,7 @@ function RouterAISettings() {
     setSavedBaseUrl(baseUrl)
     setSavedModel(model)
     setIsSaving(false)
+    setHealth("ok")
     setSaveResult({ ok: true, message: "Saved!" })
     setTimeout(() => setSaveResult(null), 2000)
   }
@@ -182,16 +222,20 @@ function RouterAISettings() {
     routeraiSettings.clearApiKey()
     setApiKey("")
     setSavedApiKey("")
+    setHealth("idle")
     setSaveResult(null)
   }
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">RouterAI</h3>
-        <p className="text-sm text-muted-foreground">
-          OpenAI-compatible model gateway with configurable tenant base URL
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">RouterAI</h3>
+          <p className="text-sm text-muted-foreground">
+            OpenAI-compatible model gateway with configurable tenant base URL
+          </p>
+        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -277,24 +321,19 @@ function OllamaSettings() {
   const [url, setUrl] = useState(() => ollamaSettings.getUrl())
   const [model, setModel] = useState(() => ollamaSettings.getModel())
   const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [health, setHealth] = useState<HealthState>("checking")
+
+  useEffect(() => {
+    ollama.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+  }, [])
 
   const handleSave = () => {
     ollamaSettings.setUrl(url)
     ollamaSettings.setModel(model)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const result = await ollama.checkHealth()
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setHealth("checking")
+    ollama.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
   }
 
   return (
@@ -306,16 +345,7 @@ function OllamaSettings() {
             Run LLMs locally on your machine or network
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400 max-w-xs truncate">
-              {status.error}
-            </span>
-          )}
-        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -359,9 +389,6 @@ function OllamaSettings() {
         <DebouncedButton onClick={handleSave} debounceMs={500}>
           {saved ? "Saved!" : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
       </div>
     </div>
   )
