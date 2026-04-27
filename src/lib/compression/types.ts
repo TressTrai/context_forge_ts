@@ -10,7 +10,7 @@ export type CompressionStrategy = "semantic" | "structural" | "statistical"
 /**
  * LLM providers that can perform compression.
  */
-export type CompressionProvider = "ollama" | "openrouter" | "claude-code"
+export type CompressionProvider = "ollama" | "openrouter" | "routerai" | "claude-code"
 
 /**
  * Request to compress one or more blocks.
@@ -100,6 +100,8 @@ export interface ProviderConfig {
   // OpenRouter
   openrouterApiKey?: string
   openrouterModel?: string
+  // RouterAI
+  routeraiModel?: string
 }
 
 /**

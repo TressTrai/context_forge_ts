@@ -476,6 +476,11 @@ function CompressionProviderSettings() {
       description: "Uses OpenRouter API (requires API key configuration above)",
     },
     {
+      value: "routerai",
+      label: "RouterAI",
+      description: "Uses RouterAI API (requires API key configuration above)",
+    },
+    {
       value: "ollama",
       label: "Ollama",
       description: "Uses local Ollama server (requires Ollama setup above)",
