@@ -320,20 +320,53 @@ function RouterAISettings() {
 function OllamaSettings() {
   const [url, setUrl] = useState(() => ollamaSettings.getUrl())
   const [model, setModel] = useState(() => ollamaSettings.getModel())
-  const [saved, setSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedUrl, setSavedUrl] = useState(() => ollamaSettings.getUrl())
+  const [savedModel, setSavedModel] = useState(() => ollamaSettings.getModel())
   const [health, setHealth] = useState<HealthState>("checking")
+
+  const hasChanges = url !== savedUrl || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [url, model])
 
   useEffect(() => {
     ollama.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
   }, [])
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    setHealth("checking")
+    const result = await ollama.checkHealth(url)
+    if (!result.ok) {
+      setIsSaving(false)
+      setHealth("error")
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
+    // Validate model exists in Ollama
+    try {
+      const models = await ollama.listModels(url)
+      const modelIds = models.map((m) => m.name)
+      const normalizedModel = model.includes(":") ? model : `${model}:latest`
+      if (modelIds.length > 0 && !modelIds.includes(model) && !modelIds.includes(normalizedModel)) {
+        setIsSaving(false)
+        setHealth("error")
+        setSaveResult({ ok: false, message: `Model "${model}" not found. Run: ollama pull ${model}` })
+        return
+      }
+    } catch {
+      // If listing fails, skip model check
+    }
     ollamaSettings.setUrl(url)
     ollamaSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-    setHealth("checking")
-    ollama.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+    setSavedUrl(url)
+    setSavedModel(model)
+    setIsSaving(false)
+    setHealth("ok")
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   return (
@@ -386,9 +419,14 @@ function OllamaSettings() {
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
