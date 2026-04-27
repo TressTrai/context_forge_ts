@@ -3,6 +3,8 @@
  */
 
 import { useState, useEffect } from "react"
+import { useQuery } from "convex/react"
+import { api } from "../../../convex/_generated/api"
 import { createFileRoute } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { DebouncedButton } from "@/components/ui/debounced-button"
@@ -454,8 +456,18 @@ function ClaudeCodeSettings() {
 }
 
 function CompressionProviderSettings() {
+  const features = useQuery(api.features.getFlags)
+  const claudeCodeEnabled = features?.claudeCodeEnabled ?? false
+
   const [provider, setProvider] = useState<CompressionProvider>(() => compressionSettings.getProvider())
   const [saved, setSaved] = useState(false)
+
+  // Auto-switch away from claude-code if it becomes disabled
+  useEffect(() => {
+    if (features !== undefined && !claudeCodeEnabled && provider === "claude-code") {
+      handleProviderChange("openrouter")
+    }
+  }, [claudeCodeEnabled, features])
 
   const handleProviderChange = (value: CompressionProvider) => {
     setProvider(value)
@@ -464,7 +476,7 @@ function CompressionProviderSettings() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const providers: Array<{ value: CompressionProvider; label: string; description: string }> = [
+  const allProviders: Array<{ value: CompressionProvider; label: string; description: string }> = [
     {
       value: "claude-code",
       label: "Claude Code (Recommended)",
@@ -486,6 +498,10 @@ function CompressionProviderSettings() {
       description: "Uses local Ollama server (requires Ollama setup above)",
     },
   ]
+
+  const providers = claudeCodeEnabled
+    ? allProviders
+    : allProviders.filter((p) => p.value !== "claude-code")
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">
