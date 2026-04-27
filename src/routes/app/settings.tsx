@@ -215,10 +215,21 @@ function RouterAISettings() {
               Clear
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Get your API key from{" "}
+            <a
+              href="https://routerai.ru/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              routerai.ru/settings/keys
+            </a>
+          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="routerai-base-url">Base URL</Label>
+          <Label htmlFor="routerai-base-url">API Base URL</Label>
           <Input
             id="routerai-base-url"
             placeholder="https://routerai.ru/api/v1"
@@ -226,7 +237,7 @@ function RouterAISettings() {
             onChange={(e) => setBaseUrl(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Default: https://routerai.ru/api/v1
+            Default: https://routerai.ru/api/v1. Change only if connecting to a different RouterAI server
           </p>
         </div>
 
@@ -238,6 +249,17 @@ function RouterAISettings() {
             value={model}
             onChange={(e) => setModel(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">
+            See{" "}
+            <a
+              href="https://routerai.ru/models"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              available models
+            </a>
+          </p>
         </div>
       </div>
 
