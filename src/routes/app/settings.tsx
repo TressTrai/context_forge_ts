@@ -82,11 +82,12 @@ function OpenRouterSettings() {
           <div className="flex gap-2">
             <Input
               id="openrouter-key"
-              type="password"
+              type="text"
+              autoComplete="off"
               placeholder="sk-or-v1-..."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1"
+              className="flex-1 font-mono text-sm"
             />
             <Button variant="outline" size="sm" onClick={handleClear}>
               Clear
@@ -201,11 +202,12 @@ function RouterAISettings() {
           <div className="flex gap-2">
             <Input
               id="routerai-key"
-              type="password"
+              type="text"
+              autoComplete="off"
               placeholder="sk-..."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1"
+              className="flex-1 font-mono text-sm"
             />
             <Button variant="outline" size="sm" onClick={handleClear}>
               Clear
