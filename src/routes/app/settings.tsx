@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { openrouter, ollama, routerai } from "@/lib/llm"
 import { openrouter as openrouterSettings, ollama as ollamaSettings, compression as compressionSettings, routerai as routeraiSettings, type CompressionProvider } from "@/lib/llm/settings"
+import { github as githubSettings, gitlab as gitlabSettings } from "@/lib/git-export/settings"
+import { checkConnection as ghCheckConnection } from "@/lib/git-export/github"
+import { checkConnection as glCheckConnection } from "@/lib/git-export/gitlab"
 
 // Provider health status
 interface ProviderStatus {
@@ -439,6 +442,290 @@ function CompressionProviderSettings() {
   )
 }
 
+function GitHubSettings() {
+  const [pat, setPat] = useState(() => {
+    const stored = githubSettings.getPat()
+    return stored ? "ghp_****" + stored.slice(-4) : ""
+  })
+  const [repoUrl, setRepoUrl] = useState(() => githubSettings.getDefaultRepoUrl())
+  const [folder, setFolder] = useState(() => githubSettings.getDefaultFolder())
+  const [saved, setSaved] = useState(false)
+  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+
+  const handleSave = () => {
+    if (pat && !pat.startsWith("ghp_****")) {
+      githubSettings.setPat(pat)
+    }
+    githubSettings.setDefaultRepoUrl(repoUrl)
+    githubSettings.setDefaultFolder(folder)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleTest = async () => {
+    const currentPat = pat.startsWith("ghp_****") ? githubSettings.getPat() : pat
+    if (!currentPat) return
+    setStatus({ checking: true, ok: false })
+    try {
+      const { login } = await ghCheckConnection(currentPat)
+      setStatus({ checking: false, ok: true, model: login })
+    } catch (e) {
+      setStatus({ checking: false, ok: false, error: String(e) })
+    }
+  }
+
+  const handleClear = () => {
+    githubSettings.clearPat()
+    setPat("")
+    setStatus({ checking: false, ok: false })
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">GitHub</h3>
+          <p className="text-sm text-muted-foreground">
+            Export project results to a GitHub repository for team review
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {status.ok && (
+            <span className="text-sm text-green-600 dark:text-green-400">
+              Connected as {status.model}
+            </span>
+          )}
+          {status.error && (
+            <span className="text-sm text-red-600 dark:text-red-400 max-w-xs truncate">
+              {status.error}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="github-pat">Personal Access Token</Label>
+          <div className="flex gap-2">
+            <Input
+              id="github-pat"
+              type="password"
+              placeholder="ghp_..."
+              value={pat}
+              onChange={(e) => setPat(e.target.value)}
+              className="flex-1"
+            />
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
+          <div className="rounded-md bg-muted/50 border border-border p-3 space-y-1.5 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">How to get a token:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                Go to{" "}
+                <span className="font-mono bg-muted px-1 rounded">
+                  github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)
+                </span>
+              </li>
+              <li>Click <span className="font-medium">Generate new token (classic)</span></li>
+              <li>
+                Select the{" "}
+                <code className="bg-muted px-1 rounded font-mono">repo</code>{" "}
+                scope — required for both private and public repositories
+              </li>
+              <li>Copy the token — it is shown only once</li>
+            </ol>
+            <p className="text-amber-600 dark:text-amber-400 font-medium">
+              Use <span className="font-mono">Tokens (classic)</span>, not Fine-grained tokens
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="github-repo">Default Repository URL</Label>
+          <Input
+            id="github-repo"
+            placeholder="https://github.com/your-org/project-reviews"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="github-folder">Default Folder in Repo</Label>
+          <Input
+            id="github-folder"
+            placeholder="team-reviews/q2"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Leave empty to put files in repo root.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <DebouncedButton onClick={handleSave} disabled={!pat} debounceMs={500}>
+          {saved ? "Saved!" : "Save"}
+        </DebouncedButton>
+        <Button variant="outline" onClick={handleTest} disabled={status.checking || !pat}>
+          {status.checking ? "Checking..." : "Test Connection"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function GitLabSettings() {
+  const [pat, setPat] = useState(() => {
+    const stored = gitlabSettings.getPat()
+    return stored ? "glpat-****" + stored.slice(-4) : ""
+  })
+  const [instanceUrl, setInstanceUrl] = useState(() => gitlabSettings.getInstanceUrl())
+  const [repoUrl, setRepoUrl] = useState(() => gitlabSettings.getDefaultRepoUrl())
+  const [folder, setFolder] = useState(() => gitlabSettings.getDefaultFolder())
+  const [saved, setSaved] = useState(false)
+  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+
+  const handleSave = () => {
+    if (pat && !pat.startsWith("glpat-****")) {
+      gitlabSettings.setPat(pat)
+    }
+    gitlabSettings.setInstanceUrl(instanceUrl)
+    gitlabSettings.setDefaultRepoUrl(repoUrl)
+    gitlabSettings.setDefaultFolder(folder)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleTest = async () => {
+    const currentPat = pat.startsWith("glpat-****") ? gitlabSettings.getPat() : pat
+    if (!currentPat) return
+    setStatus({ checking: true, ok: false })
+    try {
+      const { login } = await glCheckConnection(currentPat, instanceUrl)
+      setStatus({ checking: false, ok: true, model: login })
+    } catch (e) {
+      setStatus({ checking: false, ok: false, error: String(e) })
+    }
+  }
+
+  const handleClear = () => {
+    gitlabSettings.clearPat()
+    setPat("")
+    setStatus({ checking: false, ok: false })
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">GitLab</h3>
+          <p className="text-sm text-muted-foreground">
+            Export project results to a GitLab repository for team review
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {status.ok && (
+            <span className="text-sm text-green-600 dark:text-green-400">
+              Connected as {status.model}
+            </span>
+          )}
+          {status.error && (
+            <span className="text-sm text-red-600 dark:text-red-400 max-w-xs truncate">
+              {status.error}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="gitlab-pat">Personal Access Token</Label>
+          <div className="flex gap-2">
+            <Input
+              id="gitlab-pat"
+              type="password"
+              placeholder="glpat-..."
+              value={pat}
+              onChange={(e) => setPat(e.target.value)}
+              className="flex-1"
+            />
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
+          <div className="rounded-md bg-muted/50 border border-border p-3 space-y-1.5 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">How to get a token:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                Go to{" "}
+                <span className="font-mono bg-muted px-1 rounded">
+                  gitlab.com → top-right avatar → Edit profile → Access Tokens
+                </span>
+              </li>
+              <li>Click <span className="font-medium">Add new token</span></li>
+              <li>
+                Select scope{" "}
+                <code className="bg-muted px-1 rounded font-mono">api</code>
+                {" "}— required for reading and writing files
+              </li>
+              <li>Copy the token — it is shown only once</li>
+            </ol>
+            <p className="text-amber-600 dark:text-amber-400 font-medium">
+              For self-hosted GitLab — use your instance URL in the field below, the steps are the same
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="gitlab-instance">Instance URL</Label>
+          <Input
+            id="gitlab-instance"
+            placeholder="https://gitlab.com"
+            value={instanceUrl}
+            onChange={(e) => setInstanceUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Change this for self-hosted GitLab instances.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="gitlab-repo">Default Repository URL</Label>
+          <Input
+            id="gitlab-repo"
+            placeholder="https://gitlab.com/your-org/project-reviews"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="gitlab-folder">Default Folder in Repo</Label>
+          <Input
+            id="gitlab-folder"
+            placeholder="team-reviews/q2"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <DebouncedButton onClick={handleSave} disabled={!pat} debounceMs={500}>
+          {saved ? "Saved!" : "Save"}
+        </DebouncedButton>
+        <Button variant="outline" onClick={handleTest} disabled={status.checking || !pat}>
+          {status.checking ? "Checking..." : "Test Connection"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -466,6 +753,20 @@ function SettingsPage() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Compression Settings</h2>
         <CompressionProviderSettings />
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Git Integration</h2>
+        <p className="text-sm text-muted-foreground">
+          Share project results with teammates via Git. Tokens are stored locally and never sent to our servers.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Windows only: if cloned files appear as modified without changes, add{" "}
+          <code className="font-mono bg-muted px-1 rounded">* text=auto eol=lf</code>{" "}
+          to your repo's <code className="font-mono bg-muted px-1 rounded">.gitattributes</code>.
+        </p>
+        <GitHubSettings />
+        <GitLabSettings />
       </div>
 
       <div className="rounded-lg border border-border p-6 space-y-2">

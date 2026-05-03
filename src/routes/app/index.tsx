@@ -39,10 +39,10 @@ import { ExportSkillDialog } from "@/components/skills/ExportSkillDialog"
 import { useSkillImport } from "@/hooks/useSkillImport"
 import { LinkBlockPopover } from "@/components/LinkBlockPopover"
 import { SaveTemplateDialog, ApplyTemplateDialog } from "@/components/templates"
-import { AddToProjectDialog } from "@/components/projects"
+import { AddToProjectDialog, ShareSessionDialog } from "@/components/projects"
 import { MemoryDrawer } from "@/components/memory/MemoryDrawer"
 import { ResearchBlock } from "@/components/ResearchBlock"
-import { Save, FolderPlus, FileDown } from "lucide-react"
+import { Save, FolderPlus, FileDown, Share2 } from "lucide-react"
 
 const ZONE_INDEX: Record<Zone, number> = { PERMANENT: 0, STABLE: 1, WORKING: 2 }
 
@@ -945,6 +945,7 @@ function HomePage() {
   const [showSaveTemplate, setShowSaveTemplate] = useState(false)
   const [showApplyTemplate, setShowApplyTemplate] = useState(false)
   const [showAddToProject, setShowAddToProject] = useState(false)
+  const [showShareSession, setShowShareSession] = useState(false)
   const { toast } = useToast()
 
   // Skill import for drag-and-drop (shared across all zones)
@@ -1127,6 +1128,16 @@ function HomePage() {
             <FolderPlus className="w-3 h-3 mr-1" />
             Project
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowShareSession(true)}
+            title="Share this session to Git"
+            className="h-7 text-xs px-2"
+          >
+            <Share2 className="w-3 h-3 mr-1" />
+            Share
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <BrainstormPanel sessionId={sessionId} compact />
@@ -1220,6 +1231,13 @@ function HomePage() {
             isOpen={showAddToProject}
             onClose={() => setShowAddToProject(false)}
             sessionId={sessionId}
+          />
+          <ShareSessionDialog
+            isOpen={showShareSession}
+            onClose={() => setShowShareSession(false)}
+            sessionId={sessionId}
+            sessionName={sessionData?.name ?? "Session"}
+            projectId={sessionData?.projectId ?? undefined}
           />
         </>
       )}
