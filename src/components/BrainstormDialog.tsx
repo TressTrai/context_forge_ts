@@ -484,6 +484,14 @@ export function BrainstormDialog({
     }
   }, [providerHealth, provider, onProviderChange])
 
+  // True while all health results are still pending (initial load)
+  const isCheckingHealth =
+    providerHealth !== undefined &&
+    providerHealth.ollama === null &&
+    providerHealth.claude === null &&
+    providerHealth.openrouter === null &&
+    (providerHealth.routerai === null || providerHealth.routerai === undefined)
+
   // Check if provider is available
   // Be optimistic while health checks are pending - allow input immediately
   const isProviderAvailable =
@@ -525,27 +533,34 @@ export function BrainstormDialog({
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold">Brainstorm</h2>
               {/* Provider selector */}
-              <select
-                value={provider}
-                onChange={(e) => onProviderChange(e.target.value as Provider)}
-                disabled={!canChangeProvider || isStreaming}
-                className="text-sm border border-input rounded-md px-2 py-1 bg-background disabled:opacity-50"
-              >
-                {!providerHealth?.claude?.disabled && (
-                  <option value="claude" disabled={!providerHealth?.claude?.ok}>
-                    Claude {providerHealth?.claude?.ok ? "" : "(offline)"}
+              {isCheckingHealth ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                  Checking providers...
+                </div>
+              ) : (
+                <select
+                  value={provider}
+                  onChange={(e) => onProviderChange(e.target.value as Provider)}
+                  disabled={!canChangeProvider || isStreaming}
+                  className="text-sm border border-input rounded-md px-2 py-1 bg-background disabled:opacity-50"
+                >
+                  {!providerHealth?.claude?.disabled && (
+                    <option value="claude" disabled={!providerHealth?.claude?.ok}>
+                      Claude {providerHealth?.claude?.ok ? "" : "(offline)"}
+                    </option>
+                  )}
+                  <option value="ollama" disabled={!providerHealth?.ollama?.ok}>
+                    Ollama {providerHealth?.ollama?.ok ? "" : "(offline)"}
                   </option>
-                )}
-                <option value="ollama" disabled={!providerHealth?.ollama?.ok}>
-                  Ollama {providerHealth?.ollama?.ok ? "" : "(offline)"}
-                </option>
-                <option value="openrouter" disabled={!providerHealth?.openrouter?.ok}>
-                  OpenRouter {providerHealth?.openrouter?.ok ? "" : "(offline)"}
-                </option>
-                <option value="routerai" disabled={!providerHealth?.routerai?.ok}>
-                  RouterAI {providerHealth?.routerai?.ok ? "" : "(offline)"}
-                </option>
-              </select>
+                  <option value="openrouter" disabled={!providerHealth?.openrouter?.ok}>
+                    OpenRouter {providerHealth?.openrouter?.ok ? "" : "(offline)"}
+                  </option>
+                  <option value="routerai" disabled={!providerHealth?.routerai?.ok}>
+                    RouterAI {providerHealth?.routerai?.ok ? "" : "(offline)"}
+                  </option>
+                </select>
+              )}
               {/* Model selector (Claude provider only) */}
               {provider === "claude" && onModelChange && !providerHealth?.claude?.disabled && (
                 <select

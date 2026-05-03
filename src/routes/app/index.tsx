@@ -541,6 +541,8 @@ function ZoneColumn({
   const blocks = useQuery(api.blocks.listByZone, { sessionId, zone })
   const researchBlock = useQuery(api.research.getResearchBlock, zone === "WORKING" ? { sessionId } : "skip")
   const createBlock = useMutation(api.blocks.create)
+  const features = useQuery(api.features.getFlags)
+  const claudeCodeEnabled = features?.claudeCodeEnabled ?? false
   const info = ZONE_INFO[zone]
   const { toast } = useToast()
   const { isDragOver, dropProps } = useFileDrop({
@@ -715,7 +717,7 @@ function ZoneColumn({
         </div>
       </DroppableZone>
 
-      {zone === "WORKING" && (
+      {zone === "WORKING" && claudeCodeEnabled && (
         <div className="mt-1.5">
           <Button
             variant="ghost"

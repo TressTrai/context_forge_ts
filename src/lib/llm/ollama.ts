@@ -149,13 +149,23 @@ export async function* streamChat(
 /**
  * Check if Ollama is available and responding.
  */
-export async function checkHealth(): Promise<{
+export async function checkHealth(overrideUrl?: string): Promise<{
   ok: boolean
   url: string
   error?: string
   model?: string
 }> {
-  const ollamaUrl = settings.getUrl()
+  const ollamaUrl = overrideUrl || settings.getUrl()
+
+  try {
+    new URL(ollamaUrl)
+  } catch {
+    return { ok: false, url: ollamaUrl, error: `Invalid URL: "${ollamaUrl}"` }
+  }
+
+  if (!ollamaUrl.startsWith("http://") && !ollamaUrl.startsWith("https://")) {
+    return { ok: false, url: ollamaUrl, error: "URL must start with http:// or https://" }
+  }
 
   try {
     const response = await fetch(`${ollamaUrl}/api/tags`, {
@@ -180,7 +190,9 @@ export async function checkHealth(): Promise<{
     // Provide helpful error messages for common issues
     let errorMessage = error instanceof Error ? error.message : "Unknown error"
 
-    if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
+    if (errorMessage.includes("timed out") || errorMessage.includes("TimeoutError") || errorMessage.includes("signal timed out")) {
+      errorMessage = `Connection timed out. Check that Ollama is running at ${ollamaUrl}`
+    } else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
       errorMessage = `Cannot connect to Ollama at ${ollamaUrl}. Make sure Ollama is running with CORS enabled: OLLAMA_ORIGINS="*" ollama serve`
     }
 
@@ -195,8 +207,8 @@ export async function checkHealth(): Promise<{
 /**
  * List available models in Ollama.
  */
-export async function listModels(): Promise<OllamaModel[]> {
-  const ollamaUrl = settings.getUrl()
+export async function listModels(overrideUrl?: string): Promise<OllamaModel[]> {
+  const ollamaUrl = overrideUrl || settings.getUrl()
 
   const response = await fetch(`${ollamaUrl}/api/tags`, {
     method: "GET",

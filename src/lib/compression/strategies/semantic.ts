@@ -6,6 +6,7 @@
 import type { CompressionProvider, CompressionPromptVars } from "../types"
 import * as ollama from "@/lib/llm/ollama"
 import * as openrouter from "@/lib/llm/openrouter"
+import * as routerai from "@/lib/llm/routerai"
 
 /**
  * Default compression prompt template.
@@ -40,6 +41,7 @@ export async function compressSemantic(
     ollamaModel?: string
     ollamaUrl?: string
     openrouterModel?: string
+    routeraiModel?: string
   }
 ): Promise<string> {
   const targetRatio = options.targetRatio || 2.0
@@ -59,6 +61,8 @@ export async function compressSemantic(
       return compressWithOllama(prompt, options)
     case "openrouter":
       return compressWithOpenRouter(prompt, options)
+    case "routerai":
+      return compressWithRouterAI(prompt, options)
     case "claude-code":
       throw new Error(
         "Claude Code compression must be called via Convex action"
@@ -131,6 +135,26 @@ async function compressWithOpenRouter(
     compressed += chunk
   }
 
+  return compressed.trim()
+}
+
+/**
+ * Compress using RouterAI (client-side, OpenAI-compatible).
+ */
+async function compressWithRouterAI(
+  prompt: string,
+  options: { routeraiModel?: string }
+): Promise<string> {
+  const messages: routerai.RouterAIMessage[] = [{ role: "user", content: prompt }]
+  let compressed = ""
+  const generator = routerai.streamChat(messages, {
+    model: options.routeraiModel,
+    temperature: 0.2,
+    topP: 0.95,
+  })
+  for await (const chunk of generator) {
+    compressed += chunk
+  }
   return compressed.trim()
 }
 

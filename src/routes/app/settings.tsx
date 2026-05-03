@@ -2,7 +2,9 @@
  * Settings page for configuring LLM providers.
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useQuery } from "convex/react"
+import { api } from "../../../convex/_generated/api"
 import { createFileRoute } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { DebouncedButton } from "@/components/ui/debounced-button"
@@ -11,12 +13,28 @@ import { Label } from "@/components/ui/label"
 import { openrouter, ollama, routerai } from "@/lib/llm"
 import { openrouter as openrouterSettings, ollama as ollamaSettings, compression as compressionSettings, routerai as routeraiSettings, type CompressionProvider } from "@/lib/llm/settings"
 
-// Provider health status
-interface ProviderStatus {
-  checking: boolean
-  ok: boolean
-  error?: string
-  model?: string
+type HealthState = "idle" | "checking" | "ok" | "error"
+
+function StatusDot({ status }: { status: HealthState }) {
+  if (status === "idle") return null
+  if (status === "checking") return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
+      Checking...
+    </span>
+  )
+  if (status === "ok") return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+      <span className="w-2 h-2 rounded-full bg-green-500" />
+      Connected
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+      <span className="w-2 h-2 rounded-full bg-red-500" />
+      Offline
+    </span>
+  )
 }
 
 // Helper to get initial masked API key
@@ -28,33 +46,52 @@ function getInitialApiKeyDisplay(): string {
 function OpenRouterSettings() {
   const [apiKey, setApiKey] = useState(getInitialApiKeyDisplay)
   const [model, setModel] = useState(() => openrouterSettings.getModel())
-  const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedApiKey, setSavedApiKey] = useState(getInitialApiKeyDisplay)
+  const [savedModel, setSavedModel] = useState(() => openrouterSettings.getModel())
+  const [health, setHealth] = useState<HealthState>(() =>
+    openrouterSettings.getApiKey() ? "checking" : "idle"
+  )
 
-  const handleSave = () => {
+  const hasChanges = apiKey !== savedApiKey || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [apiKey, model])
+
+  useEffect(() => {
+    if (!openrouterSettings.getApiKey()) return
+    openrouter.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+  }, [])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await openrouter.checkHealth(keyToTest, model)
+    if (!result.ok) {
+      setIsSaving(false)
+      setHealth("error")
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
     if (apiKey && !apiKey.startsWith("sk-****")) {
       openrouterSettings.setApiKey(apiKey)
     }
     openrouterSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const result = await openrouter.checkHealth()
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setSavedApiKey(apiKey)
+    setSavedModel(model)
+    setIsSaving(false)
+    setHealth("ok")
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   const handleClear = () => {
     openrouterSettings.clearApiKey()
     setApiKey("")
-    setStatus({ checking: false, ok: false })
+    setSavedApiKey("")
+    setHealth("idle")
+    setSaveResult(null)
   }
 
   return (
@@ -66,14 +103,7 @@ function OpenRouterSettings() {
             Access Claude, GPT-4, Llama, and 100+ models via unified API
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400">{status.error}</span>
-          )}
-        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -82,11 +112,12 @@ function OpenRouterSettings() {
           <div className="flex gap-2">
             <Input
               id="openrouter-key"
-              type="password"
+              type="text"
+              autoComplete="off"
               placeholder="sk-or-v1-..."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1"
+              className="flex-1 font-mono text-sm"
             />
             <Button variant="outline" size="sm" onClick={handleClear}>
               Clear
@@ -128,52 +159,73 @@ function OpenRouterSettings() {
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} disabled={!apiKey} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
 }
 
 function RouterAISettings() {
-  const [apiKey, setApiKey] = useState(() => {
-    const stored = routeraiSettings.getApiKey()
-    return stored ? "sk-****" + stored.slice(-4) : ""
-  })
+  const initialKey = () => { const s = routeraiSettings.getApiKey(); return s ? "sk-****" + s.slice(-4) : "" }
+  const [apiKey, setApiKey] = useState(initialKey)
   const [baseUrl, setBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
   const [model, setModel] = useState(() => routeraiSettings.getModel())
-  const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedApiKey, setSavedApiKey] = useState(initialKey)
+  const [savedBaseUrl, setSavedBaseUrl] = useState(() => routeraiSettings.getBaseUrl())
+  const [savedModel, setSavedModel] = useState(() => routeraiSettings.getModel())
+  const [health, setHealth] = useState<HealthState>(() =>
+    routeraiSettings.getApiKey() ? "checking" : "idle"
+  )
 
-  const handleSave = () => {
+  const hasChanges = apiKey !== savedApiKey || baseUrl !== savedBaseUrl || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [apiKey, baseUrl, model])
+
+  useEffect(() => {
+    if (!routeraiSettings.getApiKey()) return
+    routerai.checkHealth().then((r) => setHealth(r.ok ? "ok" : "error"))
+  }, [])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    const keyToTest = apiKey.startsWith("sk-****") ? undefined : apiKey
+    const result = await routerai.checkHealth(keyToTest, model)
+    if (!result.ok) {
+      setIsSaving(false)
+      setHealth("error")
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
     if (apiKey && !apiKey.startsWith("sk-****")) {
       routeraiSettings.setApiKey(apiKey)
     }
     routeraiSettings.setBaseUrl(baseUrl)
     routeraiSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const result = await routerai.checkHealth()
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setSavedApiKey(apiKey)
+    setSavedBaseUrl(baseUrl)
+    setSavedModel(model)
+    setIsSaving(false)
+    setHealth("ok")
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   const handleClear = () => {
     routeraiSettings.clearApiKey()
     setApiKey("")
-    setStatus({ checking: false, ok: false })
+    setSavedApiKey("")
+    setHealth("idle")
+    setSaveResult(null)
   }
 
   return (
@@ -185,14 +237,7 @@ function RouterAISettings() {
             OpenAI-compatible model gateway with configurable tenant base URL
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400">{status.error}</span>
-          )}
-        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -201,20 +246,32 @@ function RouterAISettings() {
           <div className="flex gap-2">
             <Input
               id="routerai-key"
-              type="password"
+              type="text"
+              autoComplete="off"
               placeholder="sk-..."
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1"
+              className="flex-1 font-mono text-sm"
             />
             <Button variant="outline" size="sm" onClick={handleClear}>
               Clear
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Get your API key from{" "}
+            <a
+              href="https://routerai.ru/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              routerai.ru/settings/keys
+            </a>
+          </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="routerai-base-url">Base URL</Label>
+          <Label htmlFor="routerai-base-url">API Base URL</Label>
           <Input
             id="routerai-base-url"
             placeholder="https://routerai.ru/api/v1"
@@ -222,7 +279,7 @@ function RouterAISettings() {
             onChange={(e) => setBaseUrl(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Default: https://routerai.ru/api/v1
+            Default: https://routerai.ru/api/v1. Change only if connecting to a different RouterAI server
           </p>
         </div>
 
@@ -234,16 +291,29 @@ function RouterAISettings() {
             value={model}
             onChange={(e) => setModel(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">
+            See{" "}
+            <a
+              href="https://routerai.ru/models"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              available models
+            </a>
+          </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} disabled={!apiKey} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -252,25 +322,67 @@ function RouterAISettings() {
 function OllamaSettings() {
   const [url, setUrl] = useState(() => ollamaSettings.getUrl())
   const [model, setModel] = useState(() => ollamaSettings.getModel())
-  const [saved, setSaved] = useState(false)
-  const [status, setStatus] = useState<ProviderStatus>({ checking: false, ok: false })
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [savedUrl, setSavedUrl] = useState(() => ollamaSettings.getUrl())
+  const [savedModel, setSavedModel] = useState(() => ollamaSettings.getModel())
+  const [health, setHealth] = useState<HealthState>("checking")
 
-  const handleSave = () => {
+  const hasChanges = url !== savedUrl || model !== savedModel
+
+  useEffect(() => { setSaveResult(null) }, [url, model])
+
+  useEffect(() => {
+    const check = async () => {
+      const result = await ollama.checkHealth()
+      if (!result.ok) { setHealth("error"); return }
+      try {
+        const models = await ollama.listModels()
+        const modelIds = models.map((m) => m.name)
+        const normalizedModel = model.includes(":") ? model : `${model}:latest`
+        if (modelIds.length > 0 && !modelIds.includes(model) && !modelIds.includes(normalizedModel)) {
+          setHealth("error")
+          return
+        }
+      } catch { /* skip model check if listing fails */ }
+      setHealth("ok")
+    }
+    check()
+  }, [])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveResult(null)
+    setHealth("checking")
+    const result = await ollama.checkHealth(url)
+    if (!result.ok) {
+      setIsSaving(false)
+      setHealth("error")
+      setSaveResult({ ok: false, message: result.error || "Connection failed" })
+      return
+    }
+    // Validate model exists in Ollama
+    try {
+      const models = await ollama.listModels(url)
+      const modelIds = models.map((m) => m.name)
+      const normalizedModel = model.includes(":") ? model : `${model}:latest`
+      if (modelIds.length > 0 && !modelIds.includes(model) && !modelIds.includes(normalizedModel)) {
+        setIsSaving(false)
+        setHealth("error")
+        setSaveResult({ ok: false, message: `Model "${model}" not found. Run: ollama pull ${model}` })
+        return
+      }
+    } catch {
+      // If listing fails, skip model check
+    }
     ollamaSettings.setUrl(url)
     ollamaSettings.setModel(model)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTest = async () => {
-    setStatus({ checking: true, ok: false })
-    const result = await ollama.checkHealth()
-    setStatus({
-      checking: false,
-      ok: result.ok,
-      error: result.error,
-      model: result.model,
-    })
+    setSavedUrl(url)
+    setSavedModel(model)
+    setIsSaving(false)
+    setHealth("ok")
+    setSaveResult({ ok: true, message: "Saved!" })
+    setTimeout(() => setSaveResult(null), 2000)
   }
 
   return (
@@ -282,16 +394,7 @@ function OllamaSettings() {
             Run LLMs locally on your machine or network
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {status.ok && (
-            <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-          )}
-          {status.error && (
-            <span className="text-sm text-red-600 dark:text-red-400 max-w-xs truncate">
-              {status.error}
-            </span>
-          )}
-        </div>
+        <StatusDot status={health} />
       </div>
 
       <div className="grid gap-4">
@@ -332,12 +435,14 @@ function OllamaSettings() {
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <DebouncedButton onClick={handleSave} debounceMs={500}>
-          {saved ? "Saved!" : "Save"}
+        <DebouncedButton onClick={handleSave} disabled={!hasChanges || isSaving} debounceMs={500}>
+          {isSaving ? "Saving..." : "Save"}
         </DebouncedButton>
-        <Button variant="outline" onClick={handleTest} disabled={status.checking}>
-          {status.checking ? "Testing..." : "Test Connection"}
-        </Button>
+        {saveResult && (
+          <span className={saveResult.ok ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            {saveResult.message}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -365,8 +470,18 @@ function ClaudeCodeSettings() {
 }
 
 function CompressionProviderSettings() {
+  const features = useQuery(api.features.getFlags)
+  const claudeCodeEnabled = features?.claudeCodeEnabled ?? false
+
   const [provider, setProvider] = useState<CompressionProvider>(() => compressionSettings.getProvider())
   const [saved, setSaved] = useState(false)
+
+  // Auto-switch away from claude-code if it becomes disabled
+  useEffect(() => {
+    if (features !== undefined && !claudeCodeEnabled && provider === "claude-code") {
+      handleProviderChange("openrouter")
+    }
+  }, [claudeCodeEnabled, features])
 
   const handleProviderChange = (value: CompressionProvider) => {
     setProvider(value)
@@ -375,7 +490,7 @@ function CompressionProviderSettings() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const providers: Array<{ value: CompressionProvider; label: string; description: string }> = [
+  const allProviders: Array<{ value: CompressionProvider; label: string; description: string }> = [
     {
       value: "claude-code",
       label: "Claude Code (Recommended)",
@@ -387,11 +502,20 @@ function CompressionProviderSettings() {
       description: "Uses OpenRouter API (requires API key configuration above)",
     },
     {
+      value: "routerai",
+      label: "RouterAI",
+      description: "Uses RouterAI API (requires API key configuration above)",
+    },
+    {
       value: "ollama",
       label: "Ollama",
       description: "Uses local Ollama server (requires Ollama setup above)",
     },
   ]
+
+  const providers = claudeCodeEnabled
+    ? allProviders
+    : allProviders.filter((p) => p.value !== "claude-code")
 
   return (
     <div className="rounded-lg border border-border p-6 space-y-4">

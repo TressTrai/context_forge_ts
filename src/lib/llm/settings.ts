@@ -18,7 +18,7 @@ const KEYS = {
 } as const
 
 // Compression provider types
-export type CompressionProvider = "claude-code" | "ollama" | "openrouter"
+export type CompressionProvider = "claude-code" | "ollama" | "openrouter" | "routerai"
 
 // Default values
 const DEFAULTS = {
