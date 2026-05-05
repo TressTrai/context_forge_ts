@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button"
 import { useSession } from "@/contexts/SessionContext"
 import { EntryQuestionsDialog } from "@/components/EntryQuestionsDialog"
 import { useToast } from "@/components/ui/toast"
-import { ShareProjectDialog } from "@/components/projects"
+import { ShareProjectDialog, SyncDialog } from "@/components/projects"
+import { hasSyncMeta } from "@/lib/git-export/settings"
 import type { Id, Doc } from "../../../convex/_generated/dataModel"
 
 // Format relative time
@@ -279,6 +280,7 @@ function ProjectDashboard() {
 
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showSyncDialog, setShowSyncDialog] = useState(false)
   const [showCreateSession, setShowCreateSession] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false)
   const [pendingEntry, setPendingEntry] = useState<{
@@ -396,6 +398,11 @@ function ProjectDashboard() {
           <Button variant="outline" onClick={() => setShowShareDialog(true)}>
             Share
           </Button>
+          {hasSyncMeta(project._id) && (
+            <Button variant="outline" onClick={() => setShowSyncDialog(true)}>
+              Sync
+            </Button>
+          )}
           <Button onClick={() => setShowCreateSession(true)}>
             + Add Session
           </Button>
@@ -510,6 +517,12 @@ function ProjectDashboard() {
         onClose={() => setShowShareDialog(false)}
         projectId={project._id}
         projectName={project.name}
+      />
+
+      <SyncDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
+        projectId={project._id}
       />
 
       <CreateSessionDialog

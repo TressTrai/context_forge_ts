@@ -1,6 +1,6 @@
-import type { GitFile, PushResult } from "./github"
-import { pushFiles as ghPush } from "./github"
-import { pushFiles as glPush } from "./gitlab"
+import type { GitFile, PushResult, PullResult } from "./github"
+import { pushFiles as ghPush, pullFiles as ghPull } from "./github"
+import { pushFiles as glPush, pullFiles as glPull } from "./gitlab"
 import { github, gitlab } from "./settings"
 
 export type GitProviderType = "github" | "gitlab"
@@ -20,4 +20,20 @@ export async function pushWithProvider(
   }
 ): Promise<PushResult> {
   return provider === "github" ? ghPush(params) : glPush(params)
+}
+
+export type { PullResult }
+
+export async function pullWithProvider(
+  provider: GitProviderType,
+  params: {
+    repoUrl: string
+    pat: string
+    branch: string
+    paths: string[]
+  }
+): Promise<PullResult> {
+  return provider === "github"
+    ? ghPull({ repoUrl: params.repoUrl, pat: params.pat, paths: params.paths, branch: params.branch })
+    : glPull(params)
 }

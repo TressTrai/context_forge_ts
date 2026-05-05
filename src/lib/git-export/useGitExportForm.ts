@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { getProviderSettings, pushWithProvider } from "./adapter"
 import type { GitProviderType } from "./adapter"
+import { getSyncMeta, setSyncMeta } from "./settings"
 
 export function useGitExportForm({
   projectId,
@@ -33,7 +34,7 @@ export function useGitExportForm({
   }, [provider, projectId])
 
   const exportFiles = async (
-    files: { path: string; content: string }[],
+    files: { path: string; content: string; blockId: string }[],
     commitMessage: string
   ) => {
     const pat = settings.getPat()
@@ -67,6 +68,20 @@ export function useGitExportForm({
       if (projectId) {
         settings.setProjectRepoUrl(projectId, repoUrl.trim())
         settings.setProjectFolder(projectId, folder)
+
+        const existingMeta = getSyncMeta(projectId)
+        const existingBlocks = existingMeta?.blocks ?? {}
+        const updatedBlocks = { ...existingBlocks }
+        for (const file of files) {
+          updatedBlocks[file.blockId] = { path: file.path }
+        }
+        setSyncMeta(projectId, {
+          provider,
+          repoUrl: repoUrl.trim(),
+          branch: branch.trim() || (provider === "github" ? "main" : "master"),
+          folder,
+          blocks: updatedBlocks,
+        })
       }
 
       setResultUrl(result.repoUrl)

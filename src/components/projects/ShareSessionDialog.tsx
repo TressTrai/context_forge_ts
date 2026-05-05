@@ -71,7 +71,7 @@ export function ShareSessionDialog({
     })
 
   const handleExport = async () => {
-    const files: { path: string; content: string }[] = []
+    const files: { path: string; content: string; blockId: string }[] = []
     const usedPaths = new Set<string>()
 
     for (const blockId of selectedIds) {
@@ -87,6 +87,7 @@ export function ShareSessionDialog({
       usedPaths.add(path)
       files.push({
         path,
+        blockId,
         content: renderBlockToMarkdown(
           { _id: blockId, content: data.content, type: data.type },
           sessionName

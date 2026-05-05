@@ -1,4 +1,4 @@
-import type { GitFile, PushResult } from "./github"
+import type { GitFile, PushResult, PullResult } from "./github"
 
 function parseRepoUrl(repoUrl: string): { host: string; encodedPath: string; repoUrl: string } {
   const match = repoUrl.match(/^https?:\/\/([^/]+)\/(.+?)(?:\.git)?\/?$/)
@@ -13,19 +13,32 @@ function parseRepoUrl(repoUrl: string): { host: string; encodedPath: string; rep
 async function glFetch(
   pat: string,
   url: string,
-  options: RequestInit = {}
+  options: RequestInit & { allow404?: boolean } = {}
 ): Promise<Response> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "PRIVATE-TOKEN": pat,
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`GitLab API ${res.status}: ${body}`)
+  const { allow404, ...fetchOptions } = options
+  let res: Response
+  try {
+    res = await fetch(url, {
+      ...fetchOptions,
+      headers: {
+        "PRIVATE-TOKEN": pat,
+        "Content-Type": "application/json",
+        ...(fetchOptions.headers ?? {}),
+      },
+    })
+  } catch {
+    throw new Error("GitLab: request failed — check your PAT and repository access (possibly 403 Forbidden)")
+  }
+  if (!res.ok && !(allow404 && res.status === 404)) {
+    let message = `GitLab: error ${res.status}`
+    try {
+      const data = await res.clone().json()
+      if (typeof data.message === "string") message = `GitLab: ${data.message} (${res.status})`
+      else if (typeof data.error === "string") message = `GitLab: ${data.error} (${res.status})`
+    } catch {
+      // fall back to status-only message
+    }
+    throw new Error(message)
   }
   return res
 }
@@ -90,6 +103,49 @@ export async function pushFiles(params: {
   return {
     repoUrl: normalizedUrl,
     commitSha: data.id as string,
+  }
+}
+
+export async function pullFiles(params: {
+  repoUrl: string
+  pat: string
+  branch: string
+  paths: string[]
+}): Promise<PullResult> {
+  const { host, encodedPath } = parseRepoUrl(params.repoUrl)
+  const apiBase = `https://${host}/api/v4`
+
+  type Item = { found: true; path: string; content: string; sha: string } | { found: false; path: string }
+
+  const results = await Promise.allSettled(
+    params.paths.map(async (filePath): Promise<Item> => {
+      const encodedFilePath = encodeURIComponent(filePath)
+      const res = await glFetch(
+        params.pat,
+        `${apiBase}/projects/${encodedPath}/repository/files/${encodedFilePath}?ref=${encodeURIComponent(params.branch)}`,
+        { allow404: true }
+      )
+      if (res.status === 404) return { found: false, path: filePath }
+      const data = await res.json()
+      const base64 = (data.content as string).replace(/\n/g, "")
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+      return { found: true, path: filePath, content: new TextDecoder("utf-8").decode(bytes), sha: data.blob_id as string }
+    })
+  )
+
+  const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected")
+  const fulfilled = results.filter((r): r is PromiseFulfilledResult<Item> => r.status === "fulfilled")
+
+  if (fulfilled.length === 0 && rejected.length > 0) {
+    throw rejected[0].reason
+  }
+
+  return {
+    files: fulfilled.filter((r) => r.value.found).map((r) => {
+      const v = r.value as { found: true; path: string; content: string; sha: string }
+      return { path: v.path, content: v.content, sha: v.sha }
+    }),
+    notFound: fulfilled.filter((r) => !r.value.found).map((r) => r.value.path),
   }
 }
 

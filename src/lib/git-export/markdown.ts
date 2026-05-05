@@ -40,6 +40,15 @@ const TYPE_DIR: Record<string, string> = {
   skill: "skills",
 }
 
+export function stripFrontmatter(content: string): string {
+  if (!content.startsWith("---")) return content
+  const afterOpenMarker = content.indexOf("\n", 3)
+  if (afterOpenMarker === -1) return content
+  const closeMarker = content.indexOf("\n---", afterOpenMarker)
+  if (closeMarker === -1) return content
+  return content.slice(closeMarker + 4).trimStart()
+}
+
 export function buildBaseFilePath(params: {
   content: string
   blockType: string

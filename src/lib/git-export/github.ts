@@ -14,22 +14,43 @@ function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   return { owner: match[1], repo: match[2] }
 }
 
-async function ghFetch(pat: string, path: string, options: RequestInit = {}): Promise<Response> {
-  const res = await fetch(`https://api.github.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${pat}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`GitHub API ${res.status}: ${body}`)
+async function ghFetch(
+  pat: string,
+  path: string,
+  options: RequestInit & { allow404?: boolean } = {}
+): Promise<Response> {
+  const { allow404, ...fetchOptions } = options
+  let res: Response
+  try {
+    res = await fetch(`https://api.github.com${path}`, {
+      ...fetchOptions,
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+        ...(fetchOptions.headers ?? {}),
+      },
+    })
+  } catch {
+    throw new Error("GitHub: request failed — check your PAT and repository access (possibly 403 Forbidden)")
+  }
+  if (!res.ok && !(allow404 && res.status === 404)) {
+    let message = `GitHub: error ${res.status}`
+    try {
+      const data = await res.clone().json()
+      if (typeof data.message === "string") message = `GitHub: ${data.message} (${res.status})`
+    } catch {
+      // fall back to status-only message
+    }
+    throw new Error(message)
   }
   return res
+}
+
+export interface PullResult {
+  files: Array<{ path: string; content: string; sha: string }>
+  notFound: string[]
 }
 
 export async function pushFiles(params: {
@@ -125,31 +146,42 @@ export async function pushFiles(params: {
 export async function pullFiles(params: {
   repoUrl: string
   pat: string
+  branch?: string
   paths: string[]
-}): Promise<Array<{ path: string; content: string; sha: string }>> {
+}): Promise<PullResult> {
   const { owner, repo } = parseRepoUrl(params.repoUrl)
 
+  type Item = { found: true; path: string; content: string; sha: string } | { found: false; path: string }
+
   const results = await Promise.allSettled(
-    params.paths.map(async (filePath) => {
-      const res = await ghFetch(
-        params.pat,
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`
-      )
+    params.paths.map(async (filePath): Promise<Item> => {
+      const ref = params.branch ? `?ref=${encodeURIComponent(params.branch)}` : ""
+      const encodedPath = filePath.split("/").map(encodeURIComponent).join("/")
+      const res = await ghFetch(params.pat, `/repos/${owner}/${repo}/contents/${encodedPath}${ref}`, {
+        allow404: true,
+      })
+      if (res.status === 404) return { found: false, path: filePath }
       const data = await res.json()
-      return {
-        path: filePath,
-        content: atob((data.content as string).replace(/\n/g, "")),
-        sha: data.sha as string,
-      }
+      const base64 = (data.content as string).replace(/\n/g, "")
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+      return { found: true, path: filePath, content: new TextDecoder("utf-8").decode(bytes), sha: data.sha as string }
     })
   )
 
-  return results
-    .filter(
-      (r): r is PromiseFulfilledResult<{ path: string; content: string; sha: string }> =>
-        r.status === "fulfilled"
-    )
-    .map((r) => r.value)
+  const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected")
+  const fulfilled = results.filter((r): r is PromiseFulfilledResult<Item> => r.status === "fulfilled")
+
+  if (fulfilled.length === 0 && rejected.length > 0) {
+    throw rejected[0].reason
+  }
+
+  return {
+    files: fulfilled.filter((r) => r.value.found).map((r) => {
+      const v = r.value as { found: true; path: string; content: string; sha: string }
+      return { path: v.path, content: v.content, sha: v.sha }
+    }),
+    notFound: fulfilled.filter((r) => !r.value.found).map((r) => r.value.path),
+  }
 }
 
 export async function checkConnection(pat: string): Promise<{ login: string }> {
