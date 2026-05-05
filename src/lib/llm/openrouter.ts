@@ -224,13 +224,13 @@ export async function* streamChat(
 /**
  * Check if OpenRouter is available and API key is configured.
  */
-export async function checkHealth(): Promise<{
+export async function checkHealth(overrideKey?: string, overrideModel?: string): Promise<{
   ok: boolean
   configured: boolean
   error?: string
   model?: string
 }> {
-  const apiKey = settings.getApiKey()
+  const apiKey = overrideKey || settings.getApiKey()
 
   // Return early if no API key - don't make network request
   if (!apiKey || apiKey.trim() === "") {
@@ -242,7 +242,7 @@ export async function checkHealth(): Promise<{
   }
 
   try {
-    const response = await retryFetch(`${OPENROUTER_URL}/models`, {
+    const response = await retryFetch(`${OPENROUTER_URL}/auth/key`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -254,14 +254,33 @@ export async function checkHealth(): Promise<{
       return {
         ok: false,
         configured: true,
-        error: `API error: ${response.status} ${response.statusText}`,
+        error: response.status === 401 ? "Invalid API key" : `API error: ${response.status} ${response.statusText}`,
+      }
+    }
+
+    // Validate that the configured model actually exists
+    const model = overrideModel ?? settings.getModel()
+    const modelsResponse = await retryFetch(`${OPENROUTER_URL}/models`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (modelsResponse.ok) {
+      const data = (await modelsResponse.json()) as { data: Array<{ id: string }> }
+      const modelIds = data.data?.map((m) => m.id) ?? []
+      if (modelIds.length > 0 && !modelIds.includes(model)) {
+        return {
+          ok: false,
+          configured: true,
+          error: `Model "${model}" not found`,
+        }
       }
     }
 
     return {
       ok: true,
       configured: true,
-      model: settings.getModel(),
+      model,
     }
   } catch (error) {
     return {

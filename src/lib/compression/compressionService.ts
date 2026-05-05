@@ -55,6 +55,7 @@ export class CompressionService {
       ollamaUrl: config?.ollamaUrl || settings.ollama.getUrl(),
       ollamaModel: config?.ollamaModel || settings.ollama.getModel(),
       openrouterModel: config?.openrouterModel || settings.openrouter.getModel(),
+      routeraiModel: config?.routeraiModel || settings.routerai.getModel(),
     }
   }
 
@@ -65,6 +66,11 @@ export class CompressionService {
     // Check if OpenRouter is configured
     if (settings.openrouter.isConfigured()) {
       return "openrouter"
+    }
+
+    // Check if RouterAI is configured
+    if (settings.routerai.isConfigured()) {
+      return "routerai"
     }
 
     // Default to Ollama (assumes it's available locally)
@@ -214,6 +220,7 @@ export class CompressionService {
           ollamaModel: this.providerConfig.ollamaModel,
           ollamaUrl: this.providerConfig.ollamaUrl,
           openrouterModel: this.providerConfig.openrouterModel,
+          routeraiModel: this.providerConfig.routeraiModel,
         })
 
       case "structural":

@@ -157,19 +157,20 @@ export async function* streamChat(
   }
 }
 
-export async function checkHealth(): Promise<{
+export async function checkHealth(overrideKey?: string, overrideModel?: string): Promise<{
   ok: boolean
   configured: boolean
   error?: string
   model?: string
 }> {
-  const apiKey = settings.getApiKey()
+  const apiKey = overrideKey || settings.getApiKey()
   if (!apiKey || apiKey.trim() === "") {
     return { ok: false, configured: false }
   }
+  const baseUrl = settings.getBaseUrl()
   try {
-    const response = await retryFetch(
-      `${settings.getBaseUrl()}/models`,
+    const keyResponse = await retryFetch(
+      `${baseUrl}/key`,
       {
         method: "GET",
         headers: { Authorization: `Bearer ${apiKey}` },
@@ -177,10 +178,34 @@ export async function checkHealth(): Promise<{
       },
       { attempts: 1 }
     )
-    if (!response.ok) {
-      return { ok: false, configured: true, error: `API error: ${response.status} ${response.statusText}` }
+    if (!keyResponse.ok) {
+      return {
+        ok: false,
+        configured: true,
+        error: keyResponse.status === 401 ? "Invalid API key" : `API error: ${keyResponse.status} ${keyResponse.statusText}`,
+      }
     }
-    return { ok: true, configured: true, model: settings.getModel() }
+
+    // Validate model exists
+    const model = overrideModel ?? settings.getModel()
+    const modelsResponse = await retryFetch(
+      `${baseUrl}/models`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      },
+      { attempts: 1 }
+    )
+    if (modelsResponse.ok) {
+      const data = (await modelsResponse.json()) as { data: Array<{ id: string }> }
+      const modelIds = data.data?.map((m) => m.id) ?? []
+      if (modelIds.length > 0 && !modelIds.includes(model)) {
+        return { ok: false, configured: true, error: `Model "${model}" not found` }
+      }
+    }
+
+    return { ok: true, configured: true, model }
   } catch (error) {
     return {
       ok: false,
