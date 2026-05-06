@@ -149,6 +149,28 @@ export async function pullFiles(params: {
   }
 }
 
+export async function listDirectory(params: {
+  repoUrl: string
+  pat: string
+  branch: string
+  dirPath: string
+}): Promise<Array<{ name: string; path: string }>> {
+  const { host, encodedPath } = parseRepoUrl(params.repoUrl)
+  const apiBase = `https://${host}/api/v4`
+  const encodedDir = encodeURIComponent(params.dirPath)
+  const res = await glFetch(
+    params.pat,
+    `${apiBase}/projects/${encodedPath}/repository/tree?path=${encodedDir}&ref=${encodeURIComponent(params.branch)}&per_page=100`,
+    { allow404: true }
+  )
+  if (res.status === 404) return []
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+  return (data as Array<{ type: string; name: string; path: string }>)
+    .filter((item) => item.type === "blob")
+    .map((item) => ({ name: item.name, path: item.path }))
+}
+
 export async function checkConnection(pat: string, instanceUrl: string): Promise<{ login: string }> {
   const apiBase = instanceUrl.replace(/\/$/, "")
   const res = await glFetch(pat, `${apiBase}/api/v4/user`)

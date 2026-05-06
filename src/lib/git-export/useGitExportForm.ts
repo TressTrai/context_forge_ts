@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react"
+import { useQuery, useMutation } from "convex/react"
 import { getProviderSettings, pushWithProvider } from "./adapter"
 import type { GitProviderType } from "./adapter"
-import { getSyncMeta, setSyncMeta } from "./settings"
+import { renderAnchorJson } from "./markdown"
+import { api } from "../../../convex/_generated/api"
+import type { Id } from "../../../convex/_generated/dataModel"
 
 export function useGitExportForm({
   projectId,
@@ -25,6 +28,13 @@ export function useGitExportForm({
   const [error, setError] = useState<string | null>(null)
 
   const settings = getProviderSettings(provider)
+
+  const syncMapping = useQuery(
+    api.syncMappings.getSyncMapping,
+    projectId ? { projectId: projectId as Id<"projects"> } : "skip"
+  )
+  const upsertSyncMapping = useMutation(api.syncMappings.upsertSyncMapping)
+  const upsertSyncBlock = useMutation(api.syncMappings.upsertSyncBlock)
 
   useEffect(() => {
     const s = getProviderSettings(provider)
@@ -56,12 +66,33 @@ export function useGitExportForm({
     setIsLoading(true)
     setError(null)
 
+    const effectiveBranch = branch.trim() || (provider === "github" ? "main" : "master")
+
+    // For blocks already in Convex syncBlocks, use the canonical (stored) path
+    const syncBlocksByBlockId = new Map(
+      (syncMapping?.blocks ?? []).map((b) => [b.blockId as string, b.path])
+    )
+    const resolvedFiles = files.map((file) => {
+      const canonicalPath = syncBlocksByBlockId.get(file.blockId)
+      return canonicalPath ? { ...file, path: canonicalPath } : file
+    })
+
+    // Build anchor files for .contextforge/meta/
+    const now = new Date().toISOString()
+    const anchorFiles = resolvedFiles.map((file) => ({
+      path: `.contextforge/meta/${file.blockId}.json`,
+      content: renderAnchorJson({ blockId: file.blockId, path: file.path, exportedAt: now }),
+    }))
+
     try {
       const result = await pushWithProvider(provider, {
         repoUrl: repoUrl.trim(),
         pat,
-        branch: branch.trim() || (provider === "github" ? "main" : "master"),
-        files,
+        branch: effectiveBranch,
+        files: [
+          ...resolvedFiles.map((f) => ({ path: f.path, content: f.content })),
+          ...anchorFiles,
+        ],
         commitMessage,
       })
 
@@ -69,19 +100,21 @@ export function useGitExportForm({
         settings.setProjectRepoUrl(projectId, repoUrl.trim())
         settings.setProjectFolder(projectId, folder)
 
-        const existingMeta = getSyncMeta(projectId)
-        const existingBlocks = existingMeta?.blocks ?? {}
-        const updatedBlocks = { ...existingBlocks }
-        for (const file of files) {
-          updatedBlocks[file.blockId] = { path: file.path }
-        }
-        setSyncMeta(projectId, {
+        const mappingId = await upsertSyncMapping({
+          projectId: projectId as Id<"projects">,
           provider,
           repoUrl: repoUrl.trim(),
-          branch: branch.trim() || (provider === "github" ? "main" : "master"),
+          branch: effectiveBranch,
           folder,
-          blocks: updatedBlocks,
         })
+
+        for (const file of resolvedFiles) {
+          await upsertSyncBlock({
+            syncMappingId: mappingId,
+            blockId: file.blockId as Id<"blocks">,
+            path: file.path,
+          })
+        }
       }
 
       setResultUrl(result.repoUrl)

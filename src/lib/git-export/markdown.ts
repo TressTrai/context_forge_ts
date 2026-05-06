@@ -3,24 +3,20 @@ import { extractBlockTitle, sanitizeFilename } from "@/lib/skills/titleExtractor
 export { sanitizeFilename } from "@/lib/skills/titleExtractor"
 export { uniqueFilename } from "@/lib/skills/titleExtractor"
 
-function yamlStr(s: string): string {
-  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
-}
-
 export function renderBlockToMarkdown(block: {
   _id: string
   content: string
   type: string
-}, sessionName: string): string {
-  return [
-    "---",
-    `blockId: ${yamlStr(block._id)}`,
-    `type: ${yamlStr(block.type)}`,
-    `session: ${yamlStr(sessionName)}`,
-    "---",
-    "",
-    block.content,
-  ].join("\n")
+}, _sessionName: string): string {
+  return block.content
+}
+
+export function renderAnchorJson(anchor: {
+  blockId: string
+  path: string
+  exportedAt: string
+}): string {
+  return JSON.stringify(anchor, null, 2)
 }
 
 const TYPE_DIR: Record<string, string> = {

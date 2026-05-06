@@ -184,6 +184,28 @@ export async function pullFiles(params: {
   }
 }
 
+export async function listDirectory(params: {
+  repoUrl: string
+  pat: string
+  branch: string
+  dirPath: string
+}): Promise<Array<{ name: string; path: string }>> {
+  const { owner, repo } = parseRepoUrl(params.repoUrl)
+  const encodedDir = params.dirPath.split("/").map(encodeURIComponent).join("/")
+  const ref = `?ref=${encodeURIComponent(params.branch)}`
+  const res = await ghFetch(
+    params.pat,
+    `/repos/${owner}/${repo}/contents/${encodedDir}${ref}`,
+    { allow404: true }
+  )
+  if (res.status === 404) return []
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+  return (data as Array<{ type: string; name: string; path: string }>)
+    .filter((item) => item.type === "file")
+    .map((item) => ({ name: item.name, path: item.path }))
+}
+
 export async function checkConnection(pat: string): Promise<{ login: string }> {
   const res = await ghFetch(pat, "/user")
   const data = await res.json()

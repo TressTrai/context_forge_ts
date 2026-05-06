@@ -1,4 +1,3 @@
-import { getSyncMeta, setSyncMeta, patchSyncBlock } from "./settings"
 import { pullWithProvider, getProviderSettings } from "./adapter"
 import { stripFrontmatter } from "./markdown"
 
@@ -15,23 +14,30 @@ export interface SyncResult {
 }
 
 export async function checkForUpdates(
-  projectId: string,
+  syncMapping: {
+    provider: "github" | "gitlab"
+    repoUrl: string
+    branch: string
+  },
+  syncBlocks: Array<{
+    blockId: string
+    path: string
+    rejectedRemoteContent?: string
+  }>,
   convexBlocks: Array<{ _id: string; content: string }>
 ): Promise<SyncResult> {
-  const meta = getSyncMeta(projectId)
-  if (!meta || Object.keys(meta.blocks).length === 0) return { changes: [], notFound: [] }
+  if (syncBlocks.length === 0) return { changes: [], notFound: [] }
 
-  const settings = getProviderSettings(meta.provider)
+  const settings = getProviderSettings(syncMapping.provider)
   const pat = settings.getPat()
-  if (!pat) throw new Error(`${meta.provider === "github" ? "GitHub" : "GitLab"} PAT not configured`)
+  if (!pat) throw new Error(`${syncMapping.provider === "github" ? "GitHub" : "GitLab"} PAT not configured`)
 
-  const blockIds = Object.keys(meta.blocks)
-  const paths = blockIds.map((id) => meta.blocks[id].path)
+  const paths = syncBlocks.map((b) => b.path)
 
-  const { files: remoteFiles, notFound } = await pullWithProvider(meta.provider, {
-    repoUrl: meta.repoUrl,
+  const { files: remoteFiles, notFound } = await pullWithProvider(syncMapping.provider, {
+    repoUrl: syncMapping.repoUrl,
     pat,
-    branch: meta.branch,
+    branch: syncMapping.branch,
     paths,
   })
 
@@ -41,40 +47,27 @@ export async function checkForUpdates(
   const changes: SyncChange[] = []
   const yieldedPaths = new Set<string>()
 
-  for (const blockId of blockIds) {
-    const blockMeta = meta.blocks[blockId]
-    if (yieldedPaths.has(blockMeta.path)) continue
+  for (const syncBlock of syncBlocks) {
+    if (yieldedPaths.has(syncBlock.path)) continue
 
-    const remote = remoteByPath.get(blockMeta.path)
+    const remote = remoteByPath.get(syncBlock.path)
     if (!remote) continue
 
     const remoteBody = stripFrontmatter(remote.content)
-    const convexBlock = convexByBlockId.get(blockId)
+    const convexBlock = convexByBlockId.get(syncBlock.blockId)
     if (!convexBlock) continue
 
     if (remoteBody.trim() === convexBlock.content.trim()) continue
-    if (blockMeta.rejectedRemoteContent === remoteBody) continue
+    if (syncBlock.rejectedRemoteContent === remoteBody) continue
 
-    yieldedPaths.add(blockMeta.path)
+    yieldedPaths.add(syncBlock.path)
     changes.push({
-      blockId,
+      blockId: syncBlock.blockId,
       currentContent: convexBlock.content,
       remoteContent: remoteBody,
-      path: blockMeta.path,
+      path: syncBlock.path,
     })
   }
 
   return { changes, notFound }
-}
-
-export function rejectChange(projectId: string, blockId: string, remoteContent: string): void {
-  patchSyncBlock(projectId, blockId, { rejectedRemoteContent: remoteContent })
-}
-
-export function clearRejection(projectId: string, blockId: string): void {
-  const meta = getSyncMeta(projectId)
-  if (!meta?.blocks[blockId]) return
-  const { rejectedRemoteContent: _removed, ...rest } = meta.blocks[blockId]
-  meta.blocks[blockId] = rest
-  setSyncMeta(projectId, meta)
 }
