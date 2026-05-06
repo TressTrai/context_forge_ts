@@ -189,3 +189,12 @@ export async function checkConnection(pat: string): Promise<{ login: string }> {
   const data = await res.json()
   return { login: data.login as string }
 }
+
+export async function checkRepo(pat: string, repoUrl: string): Promise<void> {
+  const { owner, repo } = parseRepoUrl(repoUrl)
+  const res = await ghFetch(pat, `/repos/${owner}/${repo}`)
+  const data = await res.json()
+  if (data.permissions && data.permissions.push === false && data.permissions.admin === false) {
+    throw new Error(`GitHub: read-only access to ${owner}/${repo} — push permission required`)
+  }
+}

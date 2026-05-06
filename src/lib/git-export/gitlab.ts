@@ -155,3 +155,16 @@ export async function checkConnection(pat: string, instanceUrl: string): Promise
   const data = await res.json()
   return { login: data.username as string }
 }
+
+export async function checkRepo(pat: string, repoUrl: string): Promise<void> {
+  const { host, encodedPath } = parseRepoUrl(repoUrl)
+  const res = await glFetch(pat, `https://${host}/api/v4/projects/${encodedPath}`)
+  const data = await res.json()
+  const projectLevel = (data.permissions?.project_access?.access_level as number | undefined) ?? 0
+  const groupLevel = (data.permissions?.group_access?.access_level as number | undefined) ?? 0
+  const effectiveLevel = Math.max(projectLevel, groupLevel)
+  // Developer (30) is minimum for push; Reporter (20) and Guest (10) are read-only
+  if (effectiveLevel >= 1 && effectiveLevel < 30) {
+    throw new Error("GitLab: read-only access to repository — Developer role or higher required")
+  }
+}

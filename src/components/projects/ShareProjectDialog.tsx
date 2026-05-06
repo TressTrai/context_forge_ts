@@ -162,10 +162,14 @@ export function ShareProjectDialog({ isOpen, onClose, projectId, projectName }: 
   const form = useGitExportForm({ projectId, onClose })
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [workingIds, setWorkingIds] = useState<string[]>([])
   const blockDataRef = useRef<Map<string, BlockData>>(new Map())
 
   const registerBlockData = useCallback((id: string, data: BlockData) => {
     blockDataRef.current.set(id, data)
+    if (data.zone === "WORKING") {
+      setWorkingIds((prev) => prev.includes(id) ? prev : [...prev, id])
+    }
   }, [])
 
   const toggleId = (id: string) => {
@@ -244,17 +248,11 @@ export function ShareProjectDialog({ isOpen, onClose, projectId, projectName }: 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Blocks to export</Label>
-                    {(() => {
-                      const workingIds = [...blockDataRef.current.entries()]
-                        .filter(([, d]) => d.zone === "WORKING")
-                        .map(([id]) => id)
-                      if (workingIds.length === 0) return null
+                    {workingIds.length > 0 && (() => {
                       const allSelected = workingIds.every((id) => selectedIds.has(id))
                       return (
                         <button
-                          onClick={() => {
-                            setSelectedIds(allSelected ? new Set() : new Set(workingIds))
-                          }}
+                          onClick={() => setSelectedIds(allSelected ? new Set() : new Set(workingIds))}
                           className="text-xs text-primary hover:underline"
                         >
                           {allSelected ? "Deselect all" : "Select all"}
