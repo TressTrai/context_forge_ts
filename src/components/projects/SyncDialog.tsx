@@ -348,9 +348,12 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   const handleExportBulkToggle = useCallback((ids: string[], select: boolean) => {
     const s = exportSelectedIds.current
-    ids.forEach((id) => select ? s.add(id) : s.delete(id))
+    ids.forEach((id) => {
+      select ? s.add(id) : s.delete(id)
+      findLinkedIds(id, exportBlockDataRef.current).forEach((lid) => select ? s.add(lid) : s.delete(lid))
+    })
     setExportSelectedCount(s.size)
-  }, [])
+  }, [findLinkedIds])
 
   const handleExportBlockData = useCallback((id: string, data: BlockData) => {
     exportBlockDataRef.current.set(id, data)
@@ -366,9 +369,12 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   const handleAddBulkToggle = useCallback((ids: string[], select: boolean) => {
     const s = addSelectedIds.current
-    ids.forEach((id) => select ? s.add(id) : s.delete(id))
+    ids.forEach((id) => {
+      select ? s.add(id) : s.delete(id)
+      findLinkedIds(id, addBlockDataRef.current).forEach((lid) => select ? s.add(lid) : s.delete(lid))
+    })
     setAddSelectedCount(s.size)
-  }, [])
+  }, [findLinkedIds])
 
   const handleAddBlockData = useCallback((id: string, data: BlockData) => {
     addBlockDataRef.current.set(id, data)
