@@ -30,6 +30,7 @@ interface BlockData {
   content: string
   type: string
   typeIndex: number
+  refBlockId?: string
 }
 
 // ── DiffView ──────────────────────────────────────────────────────────────────
@@ -108,13 +109,13 @@ function SessionBlockPicker({ session, excludeIds, selectedIds, onToggle, onBulk
     for (const block of sorted) {
       const idx = typeCounters[block.type] ?? 0
       typeCounters[block.type] = idx + 1
-      onBlockData(block._id, { content: block.content, type: block.type, typeIndex: idx })
+      onBlockData(block._id, { content: block.content, type: block.type, typeIndex: idx, refBlockId: block.refBlockId as string | undefined })
     }
   }, [blocks, onBlockData])
 
   if (!blocks) return <p className="text-xs text-muted-foreground">Loading...</p>
 
-  const available = blocks.filter((b) => !excludeIds.has(b._id))
+  const available = blocks.filter((b) => !excludeIds.has(b._id) && !(b.refBlockId && excludeIds.has(b.refBlockId as string)))
   if (available.length === 0) {
     return session.name
       ? <p className="text-xs text-muted-foreground italic">All blocks already linked</p>
@@ -133,6 +134,7 @@ function SessionBlockPicker({ session, excludeIds, selectedIds, onToggle, onBulk
   const renderRow = (block: NonNullable<typeof blocks>[number], i: number) => {
     const title = extractBlockTitle(block.content, block.type, i)
     const typeMeta = BLOCK_TYPE_METADATA[block.type as BlockType]
+    const isRef = !!block.refBlockId
     return (
       <label key={block._id} className="flex items-center gap-2 cursor-pointer">
         <input
@@ -143,6 +145,7 @@ function SessionBlockPicker({ session, excludeIds, selectedIds, onToggle, onBulk
         />
         <span className="text-sm text-foreground truncate max-w-[220px]">{title}</span>
         <span className="text-xs text-muted-foreground shrink-0">{typeMeta?.displayName ?? block.type}</span>
+        {isRef && <span className="text-xs text-muted-foreground shrink-0" title="Shared block — exports as one file with its original">linked</span>}
         <ContextModeBadge contextMode={block.contextMode} />
       </label>
     )
@@ -323,11 +326,24 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   // ── Callbacks for block pickers ────────────────────────────────────────────
 
+  const findLinkedIds = useCallback((id: string, dataMap: Map<string, BlockData>): string[] => {
+    const data = dataMap.get(id)
+    const canonicalId = data?.refBlockId ?? id
+    const related: string[] = []
+    for (const [bid, bdata] of dataMap) {
+      if (bid === id) continue
+      if (bid === canonicalId || bdata.refBlockId === canonicalId) related.push(bid)
+    }
+    return related
+  }, [])
+
   const handleExportToggle = useCallback((id: string) => {
     const s = exportSelectedIds.current
-    s.has(id) ? s.delete(id) : s.add(id)
+    const adding = !s.has(id)
+    adding ? s.add(id) : s.delete(id)
+    findLinkedIds(id, exportBlockDataRef.current).forEach((lid) => adding ? s.add(lid) : s.delete(lid))
     setExportSelectedCount(s.size)
-  }, [])
+  }, [findLinkedIds])
 
   const handleExportBulkToggle = useCallback((ids: string[], select: boolean) => {
     const s = exportSelectedIds.current
@@ -341,9 +357,11 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   const handleAddToggle = useCallback((id: string) => {
     const s = addSelectedIds.current
-    s.has(id) ? s.delete(id) : s.add(id)
+    const adding = !s.has(id)
+    adding ? s.add(id) : s.delete(id)
+    findLinkedIds(id, addBlockDataRef.current).forEach((lid) => adding ? s.add(lid) : s.delete(lid))
     setAddSelectedCount(s.size)
-  }, [])
+  }, [findLinkedIds])
 
   const handleAddBulkToggle = useCallback((ids: string[], select: boolean) => {
     const s = addSelectedIds.current
@@ -364,13 +382,20 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
   ): { path: string; content: string; blockId: string }[] => {
     const files: { path: string; content: string; blockId: string }[] = []
     const usedPaths = new Set<string>()
+    const processedCanonicals = new Set<string>()
     for (const blockId of selectedSet) {
       const data = dataRef.get(blockId)
       if (!data) continue
-      const basePath = buildBaseFilePath({ content: data.content, blockType: data.type, typeIndex: data.typeIndex, folder })
+      // Ref blocks are deduplicated: export only the canonical once
+      const canonicalId = data.refBlockId ?? blockId
+      if (processedCanonicals.has(canonicalId)) continue
+      processedCanonicals.add(canonicalId)
+      const effectiveData = data.refBlockId ? (dataRef.get(data.refBlockId) ?? data) : data
+      const effectiveId = data.refBlockId ?? blockId
+      const basePath = buildBaseFilePath({ content: effectiveData.content, blockType: effectiveData.type, typeIndex: effectiveData.typeIndex, folder })
       const path = uniqueFilename(basePath, ".md", usedPaths)
       usedPaths.add(path)
-      files.push({ path, blockId, content: data.content })
+      files.push({ path, blockId: effectiveId, content: effectiveData.content })
     }
     return files
   }
