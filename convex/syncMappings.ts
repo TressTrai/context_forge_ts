@@ -58,17 +58,21 @@ export const upsertSyncBlock = mutation({
     path: v.string(),
   },
   handler: async (ctx, { syncMappingId, blockId, path }) => {
+    const block = await ctx.db.get(blockId)
+    const syncedContentHash = block?.contentHash ?? undefined
+
     const existing = await ctx.db
       .query("syncBlocks")
       .withIndex("by_block", (q) => q.eq("blockId", blockId))
       .first()
 
+    const now = Date.now()
     if (existing) {
-      await ctx.db.patch(existing._id, { path, syncMappingId, syncedAt: Date.now() })
+      await ctx.db.patch(existing._id, { path, syncMappingId, syncedAt: now, syncedContentHash })
       return existing._id
     }
 
-    return ctx.db.insert("syncBlocks", { syncMappingId, blockId, path, syncedAt: Date.now() })
+    return ctx.db.insert("syncBlocks", { syncMappingId, blockId, path, syncedAt: now, syncedContentHash })
   },
 })
 

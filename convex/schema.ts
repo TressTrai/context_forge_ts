@@ -309,6 +309,7 @@ export default defineSchema({
     blockId: v.id("blocks"),
     path: v.string(),
     syncedAt: v.optional(v.number()),
+    syncedContentHash: v.optional(v.string()),
     rejectedRemoteContent: v.optional(v.string()),
   })
     .index("by_mapping", ["syncMappingId"])

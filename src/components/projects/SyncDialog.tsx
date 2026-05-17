@@ -299,7 +299,7 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   const syncedBlockIds = syncMapping?.blocks.map((b) => b.blockId as Id<"blocks">) ?? []
   const convexBlocksRaw = useQuery(api.blocks.getMany, syncedBlockIds.length > 0 ? { ids: syncedBlockIds } : "skip")
-  const convexBlocks = (convexBlocksRaw ?? []) as Array<{ _id: string; content: string; type: string; sessionId: Id<"sessions"> }>
+  const convexBlocks = (convexBlocksRaw ?? []) as Array<{ _id: string; content: string; type: string; sessionId: Id<"sessions">; updatedAt: number; contentHash?: string }>
   const isBlocksLoading = syncedBlockIds.length > 0 && convexBlocksRaw === undefined
 
   // ── Sync check state ───────────────────────────────────────────────────────
@@ -603,6 +603,9 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
       await updateBlock({ id: change.blockId as Id<"blocks">, content: change.remoteContent })
       await clearRejectedContent({ blockId: change.blockId as Id<"blocks"> })
       await touchLastSyncedAt({ projectId: syncMapping.projectId })
+      // Sync the stored content hash so the block doesn't appear as "edited locally"
+      const sb = syncMapping.blocks.find((b) => b.blockId === change.blockId)
+      if (sb) await upsertSyncBlock({ syncMappingId: syncMapping._id, blockId: change.blockId as Id<"blocks">, path: sb.path })
       setResult((prev) => prev ? { ...prev, changes: prev.changes.filter((c) => c.blockId !== change.blockId) } : null)
       setExpandedDiffs((prev) => { const next = new Set(prev); next.delete(change.blockId); return next })
     } finally {
@@ -646,6 +649,7 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
       const commitUrl = syncMapping.provider === "github"
         ? `${pushResult.repoUrl}/commit/${pushResult.commitSha}`
         : `${pushResult.repoUrl}/-/commit/${pushResult.commitSha}`
+      await upsertSyncBlock({ syncMappingId: syncMapping._id, blockId: blockId as Id<"blocks">, path })
       setReexportResults((prev) => new Map(prev).set(path, { commitUrl, branch: syncMapping.branch }))
     } catch (e) {
       setReexportError({ blockId, message: e instanceof Error ? e.message : String(e) })
@@ -873,10 +877,15 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
                         const pushResult = reexportResults.get(sb.path)
                         const isDeleted = !block
                         const isExpanded = expandedDiffs.has(blockId)
+                        const isLocallyModified = !isDeleted && !isNotFound && !change &&
+                          (sb.syncedContentHash
+                            ? block.contentHash !== sb.syncedContentHash
+                            : block.updatedAt > (sb.syncedAt ?? 0))
 
                         let icon = <span className="shrink-0 text-green-500 text-sm">✓</span>
                         if (isNotFound) icon = <span className="shrink-0 text-yellow-500 text-sm" title="Not found in repo">⚠</span>
                         else if (change) icon = <span className="shrink-0 text-blue-500 text-sm" title="Changed in repo">↕</span>
+                        else if (isLocallyModified) icon = <span className="shrink-0 text-amber-500 text-sm" title="Edited locally, not yet pushed">✎</span>
 
                         return (
                           <div key={blockId} className="rounded-md border border-border px-3 py-2.5">
@@ -893,6 +902,7 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
                                       · open block
                                     </button>
                                   )}
+                                  {isLocallyModified && <span className="ml-1 text-amber-600 dark:text-amber-400">· edited locally</span>}
                                   {isNotFound && <span className="ml-1 text-yellow-600 dark:text-yellow-400">· not found in repo</span>}
                                   {change && !isExpanded && <span className="ml-1 text-blue-600 dark:text-blue-400">· changed in repo</span>}
                                   {pushResult && (
@@ -921,6 +931,11 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
                                       {accepting === blockId ? "…" : "Accept"}
                                     </Button>
                                   </>
+                                )}
+                                {isLocallyModified && (
+                                  <button onClick={() => handleReexport(blockId, sb.path)} disabled={reexporting === blockId} className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 disabled:opacity-50 transition-colors">
+                                    {reexporting === blockId ? "Pushing…" : "Push"}
+                                  </button>
                                 )}
                                 {isNotFound && !isDeleted && (
                                   <button onClick={() => handleReexport(blockId, sb.path)} disabled={reexporting === blockId} className="text-xs text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 disabled:opacity-50 transition-colors">
