@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { ChevronRight } from "lucide-react"
 import { dialogOverlay, dialogContent } from "@/lib/motion"
 import { checkForUpdates } from "@/lib/git-export/sync"
-import { listAnchorFiles, getProviderSettings, pushWithProvider } from "@/lib/git-export/adapter"
+import { getProviderSettings, pushWithProvider } from "@/lib/git-export/adapter"
 import { renderAnchorJson, buildBaseFilePath, uniqueFilename } from "@/lib/git-export/markdown"
 import { ProviderSelector, RepoFormFields, ContextModeBadge } from "./GitExportShared"
 import { extractBlockTitle } from "@/lib/skills/titleExtractor"
@@ -219,58 +219,7 @@ function ProjectBlockList({ projectId, excludeIds, selectedIds, onToggle, onBulk
   )
 }
 
-// ── ImportForm ────────────────────────────────────────────────────────────────
 
-function ImportForm({ projectId, onImported }: { projectId: Id<"projects">; onImported: () => void }) {
-  const [provider, setProvider] = useState<GitProviderType>("github")
-  const [repoUrl, setRepoUrl] = useState("")
-  const [branch, setBranch] = useState("main")
-  const [folder, setFolder] = useState("")
-  const [isImporting, setIsImporting] = useState(false)
-
-  useEffect(() => {
-    setBranch(provider === "github" ? "main" : "master")
-    setRepoUrl(getProviderSettings(provider).getDefaultRepoUrl())
-    setFolder(getProviderSettings(provider).getDefaultFolder())
-  }, [provider])
-  const [error, setError] = useState<string | null>(null)
-  const importFromAnchors = useMutation(api.syncMappings.importFromAnchors)
-
-  const handleImport = async () => {
-    const pat = getProviderSettings(provider).getPat()
-    if (!pat) { setError(`${provider === "github" ? "GitHub" : "GitLab"} token not configured. Set it in Settings → Git Integration.`); return }
-    if (!repoUrl.trim()) { setError("Repository URL is required."); return }
-    setIsImporting(true); setError(null)
-    try {
-      const anchors = await listAnchorFiles(provider, {
-        repoUrl: repoUrl.trim(), pat,
-        branch: branch.trim() || (provider === "github" ? "main" : "master"),
-      })
-      if (anchors.length === 0) { setError("No anchor files found in .contextforge/meta/."); return }
-      await importFromAnchors({
-        projectId, provider,
-        repoUrl: repoUrl.trim(),
-        branch: branch.trim() || (provider === "github" ? "main" : "master"),
-        folder: folder.trim(), anchors,
-      })
-      onImported()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setIsImporting(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4 border-t border-border pt-4">
-      <p className="text-xs text-muted-foreground">Restore mapping from <code>.contextforge/meta/</code> anchor files.</p>
-      <ProviderSelector provider={provider} setProvider={setProvider} />
-      <RepoFormFields provider={provider} repoUrl={repoUrl} setRepoUrl={setRepoUrl} folder={folder} setFolder={setFolder} branch={branch} setBranch={setBranch} idPrefix="import" />
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      <Button onClick={handleImport} disabled={isImporting} className="w-full">{isImporting ? "Importing..." : "Import mapping from repo"}</Button>
-    </div>
-  )
-}
 
 // ── Main dialog ───────────────────────────────────────────────────────────────
 
@@ -352,8 +301,6 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
   // ── Import state ───────────────────────────────────────────────────────────
 
-  const [showImportForm, setShowImportForm] = useState(false)
-  const [importDone, setImportDone] = useState(false)
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -668,7 +615,6 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
     setResult(null); setCheckError(null)
     setExpandedDiffs(new Set())
     setReexportResults(new Map()); setReexportError(null)
-    setImportDone(false); setShowImportForm(false)
     setActiveTab("sync")
     setAddExportSuccess(false); setSettingsSaved(false)
     exportSelectedIds.current = new Set(); setExportSelectedCount(0)
@@ -746,7 +692,7 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
               )}
 
               {/* ── INITIAL EXPORT (no mapping) ────────────────────────────── */}
-              {showContent && syncMapping === null && !importDone && (
+              {showContent && syncMapping === null && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     Link blocks to a Git repository. They'll be exported as Markdown files and can be synced across devices.
@@ -793,30 +739,14 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
 
                   {exportError && <p className="text-sm text-red-600 dark:text-red-400">{exportError}</p>}
 
-                  <div className="flex justify-between items-center pt-1">
-                    <button
-                      onClick={() => setShowImportForm((v) => !v)}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showImportForm ? "Hide" : "Already exported from another device? Import mapping →"}
-                    </button>
+                  <div className="flex justify-end items-center pt-1">
                     <Button onClick={handleInitialExport} disabled={isExporting || exportSelectedCount === 0}>
                       {isExporting ? "Exporting..." : exportSelectedCount > 0 ? `Export & link (${exportSelectedCount})` : "Export & link"}
                     </Button>
                   </div>
-
-                  {showImportForm && projectId && (
-                    <ImportForm projectId={projectId as Id<"projects">} onImported={() => setImportDone(true)} />
-                  )}
                 </div>
               )}
 
-              {showContent && syncMapping === null && importDone && (
-                <div className="space-y-3">
-                  <p className="text-sm text-green-600 dark:text-green-400">Mapping imported. Close and reopen to sync.</p>
-                  <Button variant="outline" className="w-full" onClick={handleClose}>Close</Button>
-                </div>
-              )}
 
               {/* ── TAB: SYNCED FILES ──────────────────────────────────────── */}
               {hasTabs && activeTab === "sync" && (
