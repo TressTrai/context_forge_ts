@@ -13,6 +13,7 @@ import { ChevronRight } from "lucide-react"
 import { dialogOverlay, dialogContent } from "@/lib/motion"
 import { checkForUpdates } from "@/lib/git-export/sync"
 import { getProviderSettings, pushWithProvider } from "@/lib/git-export/adapter"
+import { github, gitlab } from "@/lib/git-export/settings"
 import { renderAnchorJson, buildBaseFilePath, uniqueFilename } from "@/lib/git-export/markdown"
 import { ProviderSelector, RepoFormFields, ContextModeBadge } from "./GitExportShared"
 import { extractBlockTitle } from "@/lib/skills/titleExtractor"
@@ -711,13 +712,22 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
                 <p className="text-sm text-muted-foreground">Add this session to a project to enable Git sync.</p>
               )}
 
+              {/* No PAT configured */}
+              {showContent && !github.isConfigured() && !gitlab.isConfigured() && (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                  <p className="text-sm text-muted-foreground">No Git provider configured.</p>
+                  <p className="text-xs text-muted-foreground">Add a GitHub or GitLab token in Settings to use Git Sync.</p>
+                  <a href="/app/settings" onClick={handleClose} className="text-sm text-primary hover:underline">Open Settings →</a>
+                </div>
+              )}
+
               {/* Loading */}
-              {showContent && syncMapping === undefined && (
+              {showContent && (github.isConfigured() || gitlab.isConfigured()) && syncMapping === undefined && (
                 <p className="text-sm text-muted-foreground">Loading...</p>
               )}
 
               {/* ── INITIAL EXPORT (no mapping) ────────────────────────────── */}
-              {showContent && syncMapping === null && (
+              {showContent && (github.isConfigured() || gitlab.isConfigured()) && syncMapping === null && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     Link blocks to a Git repository. They'll be exported as Markdown files and can be synced across devices.
@@ -776,6 +786,15 @@ export function SyncDialog({ isOpen, onClose, projectId, sessionId }: SyncDialog
               {/* ── TAB: SYNCED FILES ──────────────────────────────────────── */}
               {hasTabs && activeTab === "sync" && (
                 <div className="space-y-3">
+                  {/* PAT missing for current provider */}
+                  {!getProviderSettings(syncMapping.provider).getPat() && (
+                    <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {syncMapping.provider === "github" ? "GitHub" : "GitLab"} token is not configured — sync actions will fail.
+                      </p>
+                      <a href="/app/settings" onClick={handleClose} className="text-xs text-amber-700 dark:text-amber-400 hover:underline shrink-0">Open Settings →</a>
+                    </div>
+                  )}
                   {/* Repo info + Check button */}
                   <div className="flex items-center justify-between gap-3">
                     {(() => {
