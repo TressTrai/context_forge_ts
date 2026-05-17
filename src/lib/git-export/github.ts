@@ -70,7 +70,7 @@ export async function pushFiles(params: {
   let latestCommitSha: string | null = null
   let baseTreeSha: string | null = null
 
-  const refRes = await fetch(`https://api.github.com${base}/git/ref/heads/${params.branch}`, {
+  const refRes = await fetch(`https://api.github.com${base}/git/refs/heads/${params.branch}`, {
     headers: {
       Authorization: `Bearer ${params.pat}`,
       Accept: "application/vnd.github+json",
